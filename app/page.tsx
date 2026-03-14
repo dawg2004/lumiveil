@@ -333,16 +333,16 @@ export default function Home() {
               <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>プラン・料金</div>
               <div className="two-col" style={{ display: "grid", gap: 14 }}>
                 {[
-                  { name: "ベーシック", price: "27,500", credits: 650, color: "#4a7a9b" },
-                  { name: "スタンダード", price: "46,200", credits: 1600, color: "#c9a84c", current: true },
-                  { name: "メガ", price: "88,000", credits: 4800, color: "#9b6b9b" },
+                  { name: "ベーシック", price: "27,500", credits: 650, color: "#4a7a9b", priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC },
+                  { name: "スタンダード", price: "46,200", credits: 1600, color: "#c9a84c", current: true, priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD },
+                  { name: "メガ", price: "88,000", credits: 4800, color: "#9b6b9b", priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO },
                 ].map(plan => (
                   <div key={plan.name} style={{ background: plan.current ? "rgba(201,168,76,0.07)" : "#0d2e3a", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1a3d4d"}`, borderRadius: 12, padding: 20, position: "relative" }}>
                     {plan.current && <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#c9a84c", color: "#071e28", fontSize: 9, padding: "2px 10px", borderRadius: 20, fontWeight: 700 }}>現在のプラン</div>}
                     <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: plan.color }}>{plan.name}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>¥{plan.price}<span style={{ fontSize: 11, color: "#aaa" }}>/月</span></div>
                     <div style={{ fontSize: 12, color: "#aaa", marginBottom: 14 }}>{plan.credits.toLocaleString()} クレジット/月</div>
-                    <button style={{ width: "100%", padding: "8px 0", background: plan.current ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1e4d5f"}`, borderRadius: 8, color: plan.current ? "#c9a84c" : "#666", fontSize: 12, cursor: "pointer" }}>
+                    <button style={{ width: "100%", padding: "8px 0", background: plan.current ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1e4d5f"}`, borderRadius: 8, color: plan.current ? "#c9a84c" : "#666", fontSize: 12, cursor: "pointer" }} onClick={async () => { if (!plan.current && plan.priceId) { const res = await fetch("/api/stripe/checkout", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ priceId: plan.priceId }) }); const data = await res.json(); if (data.url) window.location.href = data.url; } }}>
                       {plan.current ? "現在のプラン" : "変更する"}
                     </button>
                   </div>
