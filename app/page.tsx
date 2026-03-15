@@ -2,9 +2,10 @@
 import { useState, useCallback, useRef } from "react";
 
 const PLANS = [
-  { name: "ベーシック", price: "27,500", credits: 650, color: "#4a7a9b", priceId: "BASIC" },
-  { name: "スタンダード", price: "46,200", credits: 1600, color: "#c9a84c", current: true, priceId: "STANDARD" },
-  { name: "メガ", price: "88,000", credits: 4800, color: "#9b6b9b", priceId: "PRO" },
+  { name: "ベーシック", price: "15,000", credits: 650, color: "#4a7a9b", current: true, priceId: "BASIC" },
+  { name: "スタンダード", price: "20,000", credits: 1600, color: "#c9a84c", priceId: "STANDARD" },
+  { name: "プロ", price: "25,000", credits: 4800, color: "#9b6b9b", priceId: "PRO" },
+  { name: "ウルトラ", price: "30,000", credits: 9600, color: "#7b4e9b", priceId: "ULTRA" },
 ];
 
 const LOCATIONS = [
@@ -338,11 +339,10 @@ export default function Home() {
             <div>
               <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>プラン・料金</div>
               <div className="two-col" style={{ display: "grid", gap: 14 }}>
-                {[
-                  { name: "ベーシック", price: "27,500", credits: 650, color: "#4a7a9b", priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC },
-                  { name: "スタンダード", price: "46,200", credits: 1600, color: "#c9a84c", current: true, priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_STANDARD },
-                  { name: "メガ", price: "88,000", credits: 4800, color: "#9b6b9b", priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO },
-                ].map(plan => (
+                {PLANS.map(plan => ({
+                  ...plan,
+                  priceId: process.env[`NEXT_PUBLIC_STRIPE_PRICE_${plan.priceId}`],
+                })).map(plan => (
                   <div key={plan.name} style={{ background: plan.current ? "rgba(201,168,76,0.07)" : "#0d2e3a", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1a3d4d"}`, borderRadius: 12, padding: 20, position: "relative" }}>
                     {plan.current && <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#c9a84c", color: "#071e28", fontSize: 9, padding: "2px 10px", borderRadius: 20, fontWeight: 700 }}>現在のプラン</div>}
                     <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: plan.color }}>{plan.name}</div>
