@@ -1,6 +1,12 @@
 "use client";
 import { useState, useCallback, useRef } from "react";
 
+const PLANS = [
+  { name: "ベーシック", price: "27,500", credits: 650, color: "#4a7a9b", priceId: "BASIC" },
+  { name: "スタンダード", price: "46,200", credits: 1600, color: "#c9a84c", current: true, priceId: "STANDARD" },
+  { name: "メガ", price: "88,000", credits: 4800, color: "#9b6b9b", priceId: "PRO" },
+];
+
 const LOCATIONS = [
   { id: "white_classic", label: "ホワイトクラシック", desc: "大理石・アンティークソファ" },
   { id: "luxury_hotel", label: "高級ホテルルーム", desc: "シティビュー・間接照明" },
