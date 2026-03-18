@@ -52,6 +52,8 @@ export default function Home() {
   const [generated, setGenerated] = useState<string[]>([]);
   const [step, setStep] = useState("upload");
   const [castName, setCastName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [avatarCreating, setAvatarCreating] = useState(false);
   const [avatarProgress, setAvatarProgress] = useState(0);
@@ -316,10 +318,11 @@ export default function Home() {
                       <div key={av.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 8, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e" }}>
                         <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>👤</div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "#111" }}>{av.name}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: "#111" }}>{editingId === av.id ? <input value={editingName} onChange={e => setEditingName(e.target.value)} onBlur={() => { setAvatars(prev => prev.map(a => a.id === av.id ? { ...a, name: editingName } : a)); setEditingId(null); }} autoFocus style={{ fontSize: 13, fontWeight: 500, border: "1px solid #c9a84c", borderRadius: 4, padding: "2px 6px", background: "transparent" }} /> : av.name}</div>
                           <div style={{ fontSize: 10, color: "#555" }}>登録日 {av.date}</div>
                         </div>
                         <button onClick={() => { setSelectedAvatar(av.id); setTab("generate"); }} style={{ padding: "5px 10px", borderRadius: 6, background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.3)", color: "#c9a84c", fontSize: 10, cursor: "pointer" }}>選択</button>
+                        <button onClick={() => { setEditingId(av.id); setEditingName(av.name); }} style={{ padding: "5px 10px", borderRadius: 6, background: "rgba(100,100,100,0.1)", border: "1px solid rgba(100,100,100,0.3)", color: "#555", fontSize: 10, cursor: "pointer" }}>編集</button>
                       </div>
                     ))}
                   </div>

@@ -12,6 +12,15 @@ const PLAN_CREDITS: Record<string, number> = {
   basic: 650, standard: 1600, mega: 4800,
 };
 
+async function isAlreadyProcessed(stripeId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("credit_transactions")
+    .select("id")
+    .eq("stripe_id", stripeId)
+    .single();
+  return !!data;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.text();
   const sig = req.headers.get("stripe-signature")!;
@@ -30,6 +39,8 @@ export async function POST(req: NextRequest) {
       const userId = session.metadata?.userId;
       const plan = session.metadata?.plan;
       if (!userId || !plan) break;
+
+      if (await isAlreadyProcessed(session.id)) break;
 
       const credits = PLAN_CREDITS[plan] || 0;
 
@@ -53,8 +64,19 @@ export async function POST(req: NextRequest) {
 
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
-      const userId = invoice.metadata?.userId;
-      const plan = invoice.metadata?.plan;
+
+      // 初回購入はcheckout.session.completedで処理済みのためスキップ
+      if (invoice.billing_reason === "subscription_create") break;
+
+      if (await isAlreadyProcessed(invoice.id!)) break;
+
+      // サブスクリプションのメタデータからuserId/planを取得
+      const subscriptionId = invoice.subscription as string;
+      if (!subscriptionId) break;
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+      const userId = subscription.metadata?.userId;
+      const plan = subscription.metadata?.plan;
       if (!userId || !plan) break;
 
       const credits = PLAN_CREDITS[plan] || 0;
@@ -62,7 +84,7 @@ export async function POST(req: NextRequest) {
         .from("shops").select("id").eq("user_id", userId).single();
 
       if (shop) {
-        await supabase.from("shops").update({ credits }).eq("id", shop.id);
+        await supabase.from("shops").update({ plan, credits }).eq("id", shop.id);
         await supabase.from("credit_transactions").insert({
           shop_id: shop.id, type: "subscription",
           amount: credits, description: `${plan}プラン 月次クレジットリセット`,
