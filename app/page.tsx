@@ -87,7 +87,34 @@ export default function Home() {
       setAvatarProgress(i);
     }
     setAvatars(prev => [...prev, { id: Date.now().toString(), name: castName, date: new Date().toLocaleDateString("ja") }]);
-    setCastName(""); setFiles([]); setAvatarCreating(false); setAvatarProgress(0);
+    setCastName("");
+    setFiles([]);
+    setAvatarCreating(false);
+    setAvatarProgress(0);
+  };
+
+  const startEditingAvatar = (id: string, currentName: string) => {
+    setEditingId(id);
+    setEditingName(currentName);
+  };
+
+  const saveEditingAvatar = (id: string) => {
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      alert("キャスト名を入力してください");
+      return;
+    }
+
+    setAvatars(prev =>
+      prev.map(a => (a.id === id ? { ...a, name: trimmed } : a))
+    );
+    setEditingId(null);
+    setEditingName("");
+  };
+
+  const cancelEditingAvatar = () => {
+    setEditingId(null);
+    setEditingName("");
   };
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -111,7 +138,6 @@ export default function Home() {
         @media (max-width: 900px) { .two-col { grid-template-columns: 1fr !important; } }
       `}</style>
 
-      {/* Header */}
       <div style={{ background: "#071e28", borderBottom: "1px solid #1a3d4d", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#c9a84c,#8b6914)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#071e28" }}>L</div>
@@ -125,7 +151,6 @@ export default function Home() {
       </div>
 
       <div style={{ display: "flex", minHeight: "calc(100vh - 56px)" }}>
-        {/* Sidebar */}
         <div className="sidebar" style={{ width: 200, background: "#071e28", borderRight: "1px solid #1a3d4d", flexDirection: "column", padding: "20px 0", flexShrink: 0 }}>
           {NAV_ITEMS.map(item => (
             <button key={item.id} onClick={() => setTab(item.id)} style={{
@@ -139,15 +164,10 @@ export default function Home() {
           ))}
         </div>
 
-        {/* Main */}
         <div className="main-content" style={{ flex: 1, padding: 24, overflowY: "auto" }}>
-
-          {/* 画像生成タブ */}
           {tab === "generate" && (
             <div className="two-col" style={{ display: "grid", gap: 20 }}>
-              {/* 左カラム */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {/* キャスト選択 */}
                 <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 12, letterSpacing: "0.05em" }}>キャスト選択</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -167,7 +187,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* 設定 */}
                 <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 12 }}>
                   <div style={{ fontSize: 11, color: "#444", letterSpacing: "0.05em" }}>生成設定</div>
                   {[
@@ -221,7 +240,6 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* 右カラム：プレビュー */}
               <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", minHeight: 400 }}>
                 <div style={{ fontSize: 11, color: "#444", marginBottom: 14 }}>生成結果</div>
                 {step === "generating" && (
@@ -259,7 +277,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* キャスト登録タブ */}
           {tab === "avatar" && (
             <div>
               <div style={{ marginBottom: 20 }}>
@@ -311,18 +328,135 @@ export default function Home() {
                     </div>
                   )}
                 </div>
+
                 <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 14 }}>登録済みキャスト</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                     {avatars.map(av => (
-                      <div key={av.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 8, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e" }}>
-                        <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>👤</div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "#111" }}>{editingId === av.id ? <input value={editingName} onChange={e => setEditingName(e.target.value)} onBlur={() => { setAvatars(prev => prev.map(a => a.id === av.id ? { ...a, name: editingName } : a)); setEditingId(null); }} autoFocus style={{ fontSize: 13, fontWeight: 500, border: "1px solid #c9a84c", borderRadius: 4, padding: "2px 6px", background: "transparent" }} /> : av.name}</div>
-                          <div style={{ fontSize: 10, color: "#555" }}>登録日 {av.date}</div>
+                      <div
+                        key={av.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "12px 14px",
+                          borderRadius: 8,
+                          background: "rgba(0,0,0,0.04)",
+                          border: "1px solid #a89e8e",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 44,
+                            height: 44,
+                            borderRadius: 10,
+                            background: "rgba(0,0,0,0.08)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 22,
+                          }}
+                        >
+                          👤
                         </div>
-                        <button onClick={() => { setSelectedAvatar(av.id); setTab("generate"); }} style={{ padding: "5px 10px", borderRadius: 6, background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.3)", color: "#c9a84c", fontSize: 10, cursor: "pointer" }}>選択</button>
-                        <button onClick={() => { setEditingId(av.id); setEditingName(av.name); }} style={{ padding: "5px 10px", borderRadius: 6, background: "rgba(100,100,100,0.1)", border: "1px solid rgba(100,100,100,0.3)", color: "#555", fontSize: 10, cursor: "pointer" }}>編集</button>
+
+                        <div style={{ flex: 1 }}>
+                          {editingId === av.id ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              <input
+                                value={editingName}
+                                onChange={e => setEditingName(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === "Enter") saveEditingAvatar(av.id);
+                                  if (e.key === "Escape") cancelEditingAvatar();
+                                }}
+                                autoFocus
+                                style={{
+                                  width: "100%",
+                                  fontSize: 13,
+                                  fontWeight: 500,
+                                  border: "1px solid #c9a84c",
+                                  borderRadius: 6,
+                                  padding: "6px 8px",
+                                  background: "#fff8e6",
+                                  color: "#111",
+                                }}
+                              />
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button
+                                  onClick={() => saveEditingAvatar(av.id)}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: 6,
+                                    background: "rgba(201,168,76,0.15)",
+                                    border: "1px solid rgba(201,168,76,0.4)",
+                                    color: "#8b6914",
+                                    fontSize: 10,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  保存
+                                </button>
+                                <button
+                                  onClick={cancelEditingAvatar}
+                                  style={{
+                                    padding: "5px 10px",
+                                    borderRadius: 6,
+                                    background: "rgba(100,100,100,0.08)",
+                                    border: "1px solid rgba(100,100,100,0.25)",
+                                    color: "#555",
+                                    fontSize: 10,
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  キャンセル
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: "#111" }}>
+                                {av.name}
+                              </div>
+                              <div style={{ fontSize: 10, color: "#555" }}>登録日 {av.date}</div>
+                            </>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedAvatar(av.id);
+                            setTab("generate");
+                          }}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 6,
+                            background: "rgba(201,168,76,0.1)",
+                            border: "1px solid rgba(201,168,76,0.3)",
+                            color: "#c9a84c",
+                            fontSize: 10,
+                            cursor: "pointer",
+                          }}
+                        >
+                          選択
+                        </button>
+
+                        {editingId === av.id ? null : (
+                          <button
+                            onClick={() => startEditingAvatar(av.id, av.name)}
+                            style={{
+                              padding: "5px 10px",
+                              borderRadius: 6,
+                              background: "rgba(100,100,100,0.1)",
+                              border: "1px solid rgba(100,100,100,0.3)",
+                              color: "#555",
+                              fontSize: 10,
+                              cursor: "pointer",
+                            }}
+                          >
+                            編集
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -359,11 +493,9 @@ export default function Home() {
               </div>
             </div>
           )}
-
         </div>
       </div>
 
-      {/* Bottom Nav */}
       <div className="bottom-nav" style={{ justifyContent: "space-around" }}>
         {NAV_ITEMS.map(item => (
           <button key={item.id} onClick={() => setTab(item.id)} style={{
