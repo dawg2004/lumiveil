@@ -71,7 +71,10 @@ export async function POST(req: NextRequest) {
       if (await isAlreadyProcessed(invoice.id!)) break;
 
       // サブスクリプションのメタデータからuserId/planを取得
-      const subscriptionId = invoice.subscription as string;
+      const subscriptionId =
+        typeof (invoice as any).subscription === "string"
+          ? (invoice as any).subscription
+          : (invoice as any).subscription?.id;
       if (!subscriptionId) break;
 
       const subscription = await stripe.subscriptions.retrieve(subscriptionId);
