@@ -52,6 +52,8 @@ export default function Home() {
   const [generated, setGenerated] = useState<string[]>([]);
   const [step, setStep] = useState("upload");
   const [castName, setCastName] = useState("");
+  const [mosaicMode, setMosaicMode] = useState<"none" | "blur" | "gaussian">("none");
+  const [mosaicImage, setMosaicImage] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -91,6 +93,21 @@ export default function Home() {
     setFiles([]);
     setAvatarCreating(false);
     setAvatarProgress(0);
+  };
+
+  const applyMosaic = (imageUrl: string, mode: "blur" | "gaussian") => {
+    const canvas = document.createElement("canvas");
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d")!;
+      ctx.filter = mode === "blur" ? "blur(10px)" : "blur(6px) brightness(1.05)";
+      ctx.drawImage(img, 0, 0);
+      setMosaicImage(canvas.toDataURL());
+    };
+    img.src = imageUrl;
   };
 
   const startEditingAvatar = (id: string, currentName: string) => {
@@ -258,6 +275,10 @@ export default function Home() {
                         <div key={i} style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}>
                           <img src={src} alt="" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block" }} />
                           <button style={{ position: "absolute", bottom: 6, right: 6, background: "rgba(0,0,0,0.7)", border: "1px solid rgba(201,168,76,0.5)", borderRadius: 6, color: "#c9a84c", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>保存</button>
+                          <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", gap: 4 }}>
+                            <button onClick={() => applyMosaic(src, "blur")} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, color: "#fff", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>ブラー</button>
+                            <button onClick={() => applyMosaic(src, "gaussian")} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, color: "#fff", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>ガウス</button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -495,6 +516,16 @@ export default function Home() {
           )}
         </div>
       </div>
+
+      {mosaicImage && (
+        <div onClick={() => setMosaicImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <img src={mosaicImage} alt="mosaic" style={{ maxWidth: "90%", maxHeight: "70vh", borderRadius: 12 }} />
+          <div style={{ display: "flex", gap: 12 }}>
+            <a href={mosaicImage} download="mosaic.png" style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", color: "#071e28", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>保存</a>
+            <button onClick={() => setMosaicImage(null)} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>閉じる</button>
+          </div>
+        </div>
+      )}
 
       <div className="bottom-nav" style={{ justifyContent: "space-around" }}>
         {NAV_ITEMS.map(item => (
