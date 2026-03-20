@@ -320,7 +320,7 @@ export default function Home() {
                     background: files.length >= 1 && castName && !avatarCreating ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)",
                     border: "none", borderRadius: 10, color: files.length >= 1 && castName ? "#071e28" : "#555", fontWeight: 700, fontSize: 14, cursor: "pointer",
                   }}>
-                    {avatarCreating ? `学習中... ${Math.round(avatarProgress)}%` : "アバターを作成する"}
+                    {avatarCreating ? `学習中... ${Math.round(avatarProgress)}%` : "キャスト登録"}
                   </button>
                   {avatarCreating && (
                     <div style={{ height: 4, background: "#1a3d4d", borderRadius: 2 }}>
