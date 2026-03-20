@@ -281,7 +281,7 @@ export default function Home() {
             <div>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>キャスト登録</div>
-                <div style={{ fontSize: 12, color: "#aaa" }}>写真をアップロードしてAIがキャストの特徴を学習します。50クレジット消費</div>
+                <div style={{ fontSize: 12, color: "#aaa" }}>写真をアップロードしてAIがキャストの特徴を学習します。</div>
               </div>
               <div className="two-col" style={{ display: "grid", gap: 20 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -320,7 +320,7 @@ export default function Home() {
                     background: files.length >= 1 && castName && !avatarCreating ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)",
                     border: "none", borderRadius: 10, color: files.length >= 1 && castName ? "#071e28" : "#555", fontWeight: 700, fontSize: 14, cursor: "pointer",
                   }}>
-                    {avatarCreating ? `学習中... ${Math.round(avatarProgress)}%` : "アバターを作成する（50クレジット）"}
+                    {avatarCreating ? `学習中... ${Math.round(avatarProgress)}%` : "アバターを作成する"}
                   </button>
                   {avatarCreating && (
                     <div style={{ height: 4, background: "#1a3d4d", borderRadius: 2 }}>
