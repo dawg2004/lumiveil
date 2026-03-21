@@ -35,6 +35,7 @@ const HAIR_COLORS = ["黒髪", "茶髪", "金髪", "ピンク", "グレー"];
 const NAV_ITEMS = [
   { id: "generate", label: "画像生成", icon: "✦" },
   { id: "avatar", label: "キャスト登録", icon: "◈" },
+  { id: "mosaic", label: "モザイク", icon: "⊞" },
   { id: "history", label: "履歴", icon: "◎" },
   { id: "plan", label: "プラン", icon: "◇" },
 ];
@@ -482,6 +483,61 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "mosaic" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>モザイク加工</div>
+              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>キャストを選択</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {avatars.map(av => (
+                      <div key={av.id} onClick={() => { setSelectedAvatar(av.id); (window as any)._mosaicSrc = null; setMosaicImage(null); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, background: selectedAvatar === av.id ? "rgba(201,168,76,0.15)" : "rgba(0,0,0,0.04)", border: selectedAvatar === av.id ? "1px solid rgba(201,168,76,0.5)" : "1px solid #a89e8e", cursor: "pointer" }}>
+                        <div style={{ fontSize: 22 }}>👤</div>
+                        <div style={{ fontWeight: 500, fontSize: 13, color: "#111" }}>{av.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    📁 画像を選択する
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { (window as any)._mosaicSrc = URL.createObjectURL(f); setMosaicImage(null); } }} style={{ display: "none" }} />
+                  </label>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>加工範囲</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["顔全体", "目元のみ", "口元のみ"].map(area => (
+                      <button key={area} onClick={() => (window as any)._mosaicArea = area} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "rgba(0,0,0,0.06)", border: "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>強度</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {["弱", "中", "強", "最強"].map((level, i) => (
+                      <button key={level} onClick={() => (window as any)._mosaicStrength = [4, 8, 16, 24][i]} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "rgba(0,0,0,0.06)", border: "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{level}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>エフェクト</div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={() => (window as any)._mosaicSrc && applyMosaic((window as any)._mosaicSrc, "blur")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ブラー</button>
+                    <button onClick={() => (window as any)._mosaicSrc && applyMosaic((window as any)._mosaicSrc, "gaussian")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ガウス</button>
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
