@@ -36,6 +36,8 @@ const NAV_ITEMS = [
   { id: "generate", label: "画像生成", icon: "✦" },
   { id: "avatar", label: "キャスト登録", icon: "◈" },
   { id: "mosaic", label: "モザイク", icon: "⊞" },
+  { id: "edit", label: "AI編集", icon: "✎" },
+  { id: "video", label: "動画生成", icon: "▶" },
   { id: "history", label: "履歴", icon: "◎" },
   { id: "plan", label: "プラン", icon: "◇" },
 ];
@@ -55,6 +57,14 @@ export default function Home() {
   const [castName, setCastName] = useState("");
   const [mosaicMode, setMosaicMode] = useState<"none" | "blur" | "gaussian">("none");
   const [mosaicImage, setMosaicImage] = useState<string | null>(null);
+  const [mosaicArea, setMosaicArea] = useState("顔全体");
+  const [editSrc, setEditSrc] = useState<string | null>(null);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const [editResult, setEditResult] = useState<string | null>(null);
+  const [videoResult, setVideoResult] = useState<string | null>(null);
+  const [videoDuration, setVideoDuration] = useState("5");
+  const [mosaicStrength, setMosaicStrength] = useState("中");
+  const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -508,7 +518,7 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
                   <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     📁 画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { (window as any)._mosaicSrc = URL.createObjectURL(f); setMosaicImage(null); } }} style={{ display: "none" }} />
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); } }} style={{ display: "none" }} />
                   </label>
                 </div>
 
@@ -516,7 +526,7 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>加工範囲</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     {["顔全体", "目元のみ", "口元のみ"].map(area => (
-                      <button key={area} onClick={() => (window as any)._mosaicArea = area} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "rgba(0,0,0,0.06)", border: "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
+                      <button key={area} onClick={() => setMosaicArea(area)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicArea === area ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicArea === area ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
                     ))}
                   </div>
                 </div>
@@ -524,8 +534,8 @@ export default function Home() {
                 <div>
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>強度</div>
                   <div style={{ display: "flex", gap: 8 }}>
-                    {["弱", "中", "強", "最強"].map((level, i) => (
-                      <button key={level} onClick={() => (window as any)._mosaicStrength = [4, 8, 16, 24][i]} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: "rgba(0,0,0,0.06)", border: "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{level}</button>
+                    {["弱", "中", "強", "最強"].map((level) => (
+                      <button key={level} onClick={() => setMosaicStrength(level)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicStrength === level ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicStrength === level ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{level}</button>
                     ))}
                   </div>
                 </div>
@@ -533,11 +543,92 @@ export default function Home() {
                 <div>
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>エフェクト</div>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => (window as any)._mosaicSrc && applyMosaic((window as any)._mosaicSrc, "blur")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ブラー</button>
-                    <button onClick={() => (window as any)._mosaicSrc && applyMosaic((window as any)._mosaicSrc, "gaussian")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ガウス</button>
+                    <button onClick={() => mosaicSrc && applyMosaic(mosaicSrc, "blur")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ブラー</button>
+                    <button onClick={() => mosaicSrc && applyMosaic(mosaicSrc, "gaussian")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ガウス</button>
                   </div>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {tab === "edit" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>AI画像編集</div>
+              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    画像を選択する
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setEditSrc(URL.createObjectURL(f)); setEditResult(null); } }} style={{ display: "none" }} />
+                  </label>
+                </div>
+                {mosaicSrc && <img src={mosaicSrc} alt="preview" style={{ width: "100%", borderRadius: 8, marginBottom: 4, objectFit: "contain", background: "#000" }} />}
+                {editSrc && <img src={editSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000" }} />}
+                {editResult && <div><div style={{ fontSize: 11, color: "#444", marginBottom: 4 }}>編集結果</div><img src={editResult} alt="result" style={{ width: "100%", borderRadius: 8 }} /></div>}
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>編集の指示（チャット）</div>
+                  <textarea placeholder="例：背景を白にして、明るくして、コントラストを上げて" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13, minHeight: 80, resize: "none", boxSizing: "border-box" }} id="editPrompt" />
+                </div>
+                <button onClick={async () => {
+                  if (!editSrc) return alert("画像を選択してください");
+                  const prompt = (document.getElementById("editPrompt") as HTMLTextAreaElement)?.value;
+                  if (!prompt) return alert("編集の指示を入力してください");
+                  const blob = await fetch(editSrc).then(r => r.blob());
+                  const form = new FormData();
+                  form.append("file", blob, "image.jpg");
+                  const up = await fetch("https://fal.run/storage/upload", { method: "POST", headers: { "Authorization": "Key " + process.env.NEXT_PUBLIC_FAL_API_KEY }, body: form });
+                  const upData = await up.json();
+                  const res = await fetch("/api/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: upData.url, prompt }) });
+                  const data = await res.json();
+                  if (data.url) { setEditResult(data.url); }
+                }} style={{ width: "100%", padding: "13px 0", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", border: "none", color: "#071e28", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  AI編集を実行
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tab === "video" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>動画生成</div>
+              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>元画像をアップロード</div>
+                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                    画像を選択する
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setVideoSrc(URL.createObjectURL(f)); setVideoResult(null); } }} style={{ display: "none" }} />
+                  </label>
+                </div>
+                {videoSrc && <img src={videoSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000" }} />}
+                {videoResult && <div><div style={{ fontSize: 11, color: "#444", marginBottom: 4 }}>生成動画</div><video src={videoResult} controls style={{ width: "100%", borderRadius: 8 }} /></div>}
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>動画の説明（任意）</div>
+                  <textarea placeholder="例：ゆっくり微笑んでいる、髪がなびいている" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13, minHeight: 60, resize: "none", boxSizing: "border-box" }} id="videoPrompt" />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>動画の長さ</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[["3秒","3"], ["5秒","5"], ["10秒","10"]].map(([label, val]) => (
+                      <button key={val} onClick={() => setVideoDuration(val)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: videoDuration === val ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: videoDuration === val ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  if (!videoSrc) return alert("画像を選択してください");
+                  const prompt = (document.getElementById("videoPrompt") as HTMLTextAreaElement)?.value || "";
+                  const blob = await fetch(videoSrc).then(r => r.blob());
+                  const form = new FormData();
+                  form.append("file", blob, "image.jpg");
+                  const up = await fetch("https://fal.run/storage/upload", { method: "POST", headers: { "Authorization": "Key " + process.env.NEXT_PUBLIC_FAL_API_KEY }, body: form });
+                  const upData = await up.json();
+                  const res = await fetch("/api/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: upData.url, prompt }) });
+                  const data = await res.json();
+                  if (data.url) { setVideoResult(data.url); }
+                  else { alert("エラー: " + (data.error || "不明")); }
+                }} style={{ width: "100%", padding: "13px 0", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", border: "none", color: "#071e28", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                  動画を生成する
+                </button>
               </div>
             </div>
           )}
