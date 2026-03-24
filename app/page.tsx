@@ -520,6 +520,7 @@ export default function Home() {
                     📁 画像を選択する
                     <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); } }} style={{ display: "none" }} />
                   </label>
+                  {mosaicSrc && <img src={mosaicSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000", marginTop: 10 }} />}
                 </div>
 
                 <div>
