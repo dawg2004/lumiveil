@@ -155,6 +155,72 @@ export default function Home() {
     <div style={{ minHeight: "100vh", background: "#071e28", fontFamily: "'Hiragino Sans', 'Yu Gothic', sans-serif", color: "#f0ece4" }}>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { opacity: 0; transform: scale(0.96); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-16px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes shimmer {
+          0%   { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.5; }
+        }
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.92) translateY(12px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes overlayIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+
+        .header-anim  { animation: fadeIn 0.5s cubic-bezier(0.25,0.46,0.45,0.94) both; }
+        .sidebar-anim { animation: slideInLeft 0.55s cubic-bezier(0.25,0.46,0.45,0.94) 0.1s both; }
+        .content-anim { animation: fadeInUp 0.6s cubic-bezier(0.25,0.46,0.45,0.94) 0.18s both; }
+        .card-anim    { animation: scaleIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .tab-enter    { animation: fadeInUp 0.4s cubic-bezier(0.25,0.46,0.45,0.94) both; }
+
+        .nav-btn { transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.15s ease; }
+        .nav-btn:hover { transform: translateX(3px); }
+
+        .action-btn { transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease; }
+        .action-btn:hover:not(:disabled) { transform: translateY(-2px) scale(1.01); box-shadow: 0 8px 24px rgba(201,168,76,0.25); }
+        .action-btn:active:not(:disabled) { transform: scale(0.97); transition-duration: 0.08s; }
+
+        .card-hover { transition: transform 0.22s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.22s ease, border-color 0.22s ease; }
+        .card-hover:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.25); border-color: rgba(201,168,76,0.35) !important; }
+
+        .select-btn { transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.15s cubic-bezier(0.34,1.56,0.64,1); }
+        .select-btn:hover { transform: scale(1.04); }
+        .select-btn:active { transform: scale(0.96); }
+
+        .modal-overlay { animation: overlayIn 0.25s ease both; }
+        .modal-content { animation: modalIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+        .bottom-nav-btn { transition: color 0.2s ease, transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }
+        .bottom-nav-btn:active { transform: scale(0.88); }
+
+        .shimmer-bar {
+          background: linear-gradient(90deg, #c9a84c 0%, #f0d080 50%, #c9a84c 100%);
+          background-size: 200% auto;
+          animation: shimmer 1.6s linear infinite;
+        }
+
         .sidebar { display: flex; }
         .bottom-nav { display: none !important; }
         @media (max-width: 680px) {
@@ -166,7 +232,7 @@ export default function Home() {
         @media (max-width: 900px) { .two-col { grid-template-columns: 1fr !important; } }
       `}</style>
 
-      <div style={{ background: "#071e28", borderBottom: "1px solid #1a3d4d", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
+      <div className="header-anim" style={{ background: "#071e28", borderBottom: "1px solid #1a3d4d", padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#c9a84c,#8b6914)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 900, color: "#071e28" }}>L</div>
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.12em", color: "#f0ece4" }}>LUMIVEIL</span>
@@ -179,7 +245,7 @@ export default function Home() {
       </div>
 
       <div style={{ display: "flex", minHeight: "calc(100vh - 56px)" }}>
-        <div className="sidebar" style={{ width: 200, background: "#071e28", borderRight: "1px solid #1a3d4d", flexDirection: "column", padding: "20px 0", flexShrink: 0 }}>
+        <div className="sidebar sidebar-anim" style={{ width: 200, background: "#071e28", borderRight: "1px solid #1a3d4d", flexDirection: "column", padding: "20px 0", flexShrink: 0 }}>
           {NAV_ITEMS.map(item => (
             <button key={item.id} onClick={() => setTab(item.id)} style={{
               width: "100%", padding: "12px 20px", border: "none", background: tab === item.id ? "rgba(201,168,76,0.08)" : "transparent",
@@ -192,7 +258,7 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="main-content" style={{ flex: 1, padding: 24, overflowY: "auto" }}>
+        <div className="main-content content-anim" style={{ flex: 1, padding: 24, overflowY: "auto" }}>
           {tab === "generate" && (
             <div className="two-col" style={{ display: "grid", gap: 20 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -257,7 +323,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <button onClick={handleGenerate} disabled={generating || !selectedAvatar} style={{
+                <button className="action-btn" onClick={handleGenerate} disabled={generating || !selectedAvatar} style={{
                   width: "100%", padding: "14px 0",
                   background: selectedAvatar && !generating ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)",
                   border: "none", borderRadius: 10,
@@ -275,7 +341,7 @@ export default function Home() {
                     <div style={{ fontSize: 40 }}>✦</div>
                     <div style={{ fontSize: 13, color: "#333" }}>AIが画像を生成中...</div>
                     <div style={{ width: "80%", height: 4, background: "#a89e8e", borderRadius: 2 }}>
-                      <div style={{ height: "100%", width: "60%", background: "linear-gradient(90deg, #c9a84c, #f0d080)", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite" }} />
+                      <div className="shimmer-bar" style={{ height: "100%", width: "60%", borderRadius: 2 }} />
                     </div>
                   </div>
                 )}
@@ -666,8 +732,8 @@ export default function Home() {
       </div>
 
       {mosaicImage && (
-        <div onClick={() => setMosaicImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-          <img src={mosaicImage} alt="mosaic" style={{ maxWidth: "90%", maxHeight: "70vh", borderRadius: 12 }} />
+        <div className="modal-overlay" onClick={() => setMosaicImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
+          <img className="modal-content" src={mosaicImage} alt="mosaic" style={{ maxWidth: "90%", maxHeight: "70vh", borderRadius: 12 }} />
           <div style={{ display: "flex", gap: 12 }}>
             <a href={mosaicImage} download="mosaic.png" style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", color: "#071e28", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>保存</a>
             <button onClick={() => setMosaicImage(null)} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>閉じる</button>
