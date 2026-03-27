@@ -1,47 +1,134 @@
 import { NextRequest, NextResponse } from "next/server";
+import sharp from "sharp";
+
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageUrl, mode, area, strength } = await req.json();
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+    const mode = String(formData.get("mode") ?? "モザイク");
 
-    if (!imageUrl) {
-      return NextResponse.json({ error: "imageUrlは必須です" }, { status: 400 });
-    }
+    const x = Number(formData.get("x") ?? 0);
+    const y = Number(formData.get("y") ?? 0);
+    const width = Number(formData.get("width") ?? 0);
+    const height = Number(formData.get("height") ?? 0);
 
+    const rawStrength = String(formData.get("strength") ?? "2");
     const strengthMap: Record<string, number> = {
-      "弱": 0.2,
-      "中": 0.5,
-      "強": 0.8,
-      "最強": 1.0,
+      "1": 1,
+      "2": 2,
+      "3": 3,
+      "4": 4,
+      "弱": 1,
+      "中": 2,
+      "強": 3,
+      "最強": 4,
     };
+    const strength = strengthMap[rawStrength] ?? 2;
 
-    const blurStrength = strengthMap[strength] || 0.5;
-
-    const response = await fetch("https://fal.run/fal-ai/face-blur", {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${process.env.FAL_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        blur_type: mode === "gaussian" ? "gaussian" : "blur",
-        blur_strength: blurStrength,
-        face_region: area === "顔全体" ? "full" : area === "目元のみ" ? "eyes" : "mouth",
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`FAL API error: ${err}`);
+    if (!file) {
+      return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
-    const data = await response.json();
-    const resultUrl = data.image?.url || data.images?.[0]?.url;
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const meta = await sharp(bytes).metadata();
+    const imgW = meta.width ?? 0;
+    const imgH = meta.height ?? 0;
 
-    return NextResponse.json({ url: resultUrl });
+    if (!imgW || !imgH) {
+      return NextResponse.json({ error: "invalid image" }, { status: 400 });
+    }
+
+    const left = Math.max(0, Math.floor(x));
+    const top = Math.max(0, Math.floor(y));
+    const safeWidth = Math.max(1, Math.min(Math.floor(width), imgW - left));
+    const safeHeight = Math.max(1, Math.min(Math.floor(height), imgH - top));
+
+    let region: Buffer;
+
+    if (mode === "ブラー") {
+      const sigma = Math.max(2, strength * 4);
+      region = await sharp(bytes)
+        .extract({ left, top, width: safeWidth, height: safeHeight })
+        .blur(sigma)
+        .png()
+        .toBuffer();
+
+      const maskSvg = Buffer.from(`
+        <svg width="${safeWidth}" height="${safeHeight}">
+    <defs>
+      <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
+    </defs>
+    <ellipse
+      cx="${safeWidth / 2}"
+      cy="${safeHeight / 2}"
+      rx="${safeWidth * 0.36}"
+      ry="${safeHeight * 0.42}"
+      fill="white"
+      filter="url(#blur)"
+    />
+  </svg>
+      `);
+
+      region = await sharp(region)
+        .composite([{ input: maskSvg, blend: "dest-in" }])
+        .png()
+        .toBuffer();
+    } else if (mode === "ガウス") {
+      const sigma = Math.max(6, strength * 6);
+      region = await sharp(bytes)
+        .extract({ left, top, width: safeWidth, height: safeHeight })
+        .blur(sigma)
+        .png()
+        .toBuffer();
+
+      const maskSvg = Buffer.from(`
+        <svg width="${safeWidth}" height="${safeHeight}">
+    <defs>
+      <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
+    </defs>
+    <ellipse
+      cx="${safeWidth / 2}"
+      cy="${safeHeight / 2}"
+      rx="${safeWidth * 0.36}"
+      ry="${safeHeight * 0.42}"
+      fill="white"
+      filter="url(#blur)"
+    />
+  </svg>
+      `);
+
+      region = await sharp(region)
+        .composite([{ input: maskSvg, blend: "dest-in" }])
+        .png()
+        .toBuffer();
+    } else {
+      const block = Math.max(10, Math.floor(28 * strength));
+      const downW = Math.max(3, Math.floor(safeWidth / block));
+      const downH = Math.max(3, Math.floor(safeHeight / block));
+
+      region = await sharp(bytes)
+        .extract({ left, top, width: safeWidth, height: safeHeight })
+        .resize(downW, downH, { kernel: "nearest" })
+        .resize(safeWidth, safeHeight, { kernel: "nearest" })
+        .png()
+        .toBuffer();
+    }
+
+    const output = await sharp(bytes)
+      .composite([{ input: region, left, top }])
+      .png()
+      .toBuffer();
+
+    return new NextResponse(new Uint8Array(output), {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "no-store"
+      },
+    });
   } catch (error) {
-    console.error("Mosaic error:", error);
-    return NextResponse.json({ error: "モザイク処理に失敗しました" }, { status: 500 });
+    console.error("mosaic error:", error);
+    return NextResponse.json({ error: "mosaic failed" }, { status: 500 });
   }
 }
