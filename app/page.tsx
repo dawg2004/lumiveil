@@ -68,6 +68,7 @@ export default function Home() {
   const [mosaicLoading, setMosaicLoading] = useState(false);
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
   const [mosaicBox, setMosaicBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [mosaicFaceBox, setMosaicFaceBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [mosaicStage, setMosaicStage] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -120,31 +121,32 @@ export default function Home() {
     const faceY = Math.max(0, faceBox.y - padY);
     const faceW = Math.round(faceBox.width + padX * 2);
     const faceH = Math.round(faceBox.height + padY * 1.5);
+    const clampRegion = (x: number, y: number, width: number, height: number) => ({
+      x: Math.max(0, Math.round(x)),
+      y: Math.max(0, Math.round(y)),
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height)),
+    });
 
     if (area === "目元のみ") {
-      return {
-        x: faceX,
-        y: faceY + Math.round(faceH * 0.12),
-        width: faceW,
-        height: Math.round(faceH * 0.28),
-      };
+      return clampRegion(
+        faceX + faceW * 0.14,
+        faceY + faceH * 0.2,
+        faceW * 0.72,
+        faceH * 0.2
+      );
     }
 
     if (area === "口元のみ") {
-      return {
-        x: faceX + Math.round(faceW * 0.12),
-        y: faceY + Math.round(faceH * 0.56),
-        width: Math.round(faceW * 0.76),
-        height: Math.round(faceH * 0.24),
-      };
+      return clampRegion(
+        faceX + faceW * 0.22,
+        faceY + faceH * 0.62,
+        faceW * 0.56,
+        faceH * 0.16
+      );
     }
 
-    return {
-      x: faceX,
-      y: faceY,
-      width: faceW,
-      height: faceH,
-    };
+    return clampRegion(faceX, faceY, faceW, faceH);
   };
 
   const applyMosaic = async (imageUrl: string, mode: "blur" | "gaussian") => {
@@ -165,7 +167,8 @@ export default function Home() {
         return;
       }
 
-      const region = mosaicBox ?? buildRegionBox(faceBox, mosaicArea);
+      setMosaicFaceBox(faceBox);
+      const region = buildRegionBox(faceBox, mosaicArea);
       setMosaicBox(region);
 
       const modeMap: Record<"blur" | "gaussian", string> = {
@@ -591,7 +594,7 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>キャストを選択</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {avatars.map(av => (
-                      <div key={av.id} onClick={() => { setSelectedAvatar(av.id); (window as any)._mosaicSrc = null; setMosaicImage(null); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, background: selectedAvatar === av.id ? "rgba(201,168,76,0.15)" : "rgba(0,0,0,0.04)", border: selectedAvatar === av.id ? "1px solid rgba(201,168,76,0.5)" : "1px solid #a89e8e", cursor: "pointer" }}>
+                      <div key={av.id} onClick={() => { setSelectedAvatar(av.id); (window as any)._mosaicSrc = null; setMosaicImage(null); setMosaicBox(null); setMosaicFaceBox(null); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, background: selectedAvatar === av.id ? "rgba(201,168,76,0.15)" : "rgba(0,0,0,0.04)", border: selectedAvatar === av.id ? "1px solid rgba(201,168,76,0.5)" : "1px solid #a89e8e", cursor: "pointer" }}>
                         <div style={{ fontSize: 22 }}>👤</div>
                         <div style={{ fontWeight: 500, fontSize: 13, color: "#111" }}>{av.name}</div>
                       </div>
@@ -603,7 +606,7 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
                   <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     📁 画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); setMosaicBox(null); } }} style={{ display: "none" }} />
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); setMosaicBox(null); setMosaicFaceBox(null); } }} style={{ display: "none" }} />
                   </label>
                   {mosaicSrc && (
                     <div style={{ marginTop: 10, position: "relative", background: "#000", borderRadius: 8, overflow: "hidden" }}>
@@ -635,7 +638,7 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>加工範囲</div>
                   <div style={{ display: "flex", gap: 8 }}>
                     {["顔全体", "目元のみ", "口元のみ"].map(area => (
-                      <button key={area} onClick={() => setMosaicArea(area)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicArea === area ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicArea === area ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
+                      <button key={area} onClick={() => { setMosaicArea(area); setMosaicImage(null); setMosaicBox(mosaicFaceBox ? buildRegionBox(mosaicFaceBox, area) : null); }} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicArea === area ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicArea === area ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
                     ))}
                   </div>
                 </div>
