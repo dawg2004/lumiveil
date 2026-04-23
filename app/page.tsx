@@ -69,7 +69,6 @@ export default function Home() {
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
   const [mosaicBox, setMosaicBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [mosaicStage, setMosaicStage] = useState("");
-  const [mosaicCompare, setMosaicCompare] = useState(50);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -199,7 +198,6 @@ export default function Home() {
       setMosaicStage("仕上げ中...");
       const resultBlob = await apiRes.blob();
       setMosaicImage(URL.createObjectURL(resultBlob));
-      setMosaicCompare(50);
     } catch (err: any) {
       alert(err.message || "モザイク処理に失敗しました");
     } finally {
@@ -810,45 +808,58 @@ export default function Home() {
               gap: 14,
             }}
           >
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#f0ece4" }}>Before / After</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#f0ece4" }}>比較表示</div>
 
-            <div style={{ position: "relative", width: "100%", borderRadius: 12, overflow: "hidden", background: "#000" }}>
-              <img src={mosaicSrc} alt="before" style={{ width: "100%", display: "block" }} />
-              <img
-                src={mosaicImage}
-                alt="after"
-                style={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "contain",
-                  clipPath: `inset(0 ${100 - mosaicCompare}% 0 0)`,
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: `${mosaicCompare}%`,
-                  width: 2,
-                  background: "#f0c85a",
-                  transform: "translateX(-1px)",
-                }}
-              />
-            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 14,
+              }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#c9a84c" }}>加工前</div>
+                <div
+                  style={{
+                    height: 300,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: "#000",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <img
+                    src={mosaicSrc}
+                    alt="before"
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                  />
+                </div>
+              </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={mosaicCompare}
-                onChange={e => setMosaicCompare(Number(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <div style={{ minWidth: 44, fontSize: 12, color: "#c9a84c", fontWeight: 700 }}>{mosaicCompare}%</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#c9a84c" }}>加工後</div>
+                <div
+                  style={{
+                    height: 300,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    background: "#000",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <img
+                    src={mosaicImage}
+                    alt="after"
+                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                  />
+                </div>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
