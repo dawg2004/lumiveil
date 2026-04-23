@@ -17,9 +17,9 @@ export async function POST(req: NextRequest) {
     const rawStrength = String(formData.get("strength") ?? "2");
     const strengthMap: Record<string, number> = {
       "1": 1,
-      "2": 2,
-      "3": 3,
-      "4": 4,
+      "2": 3,
+      "3": 6,
+      "4": 10,
       "5": 5,
       "6": 6,
       "7": 7,
