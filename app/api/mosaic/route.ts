@@ -126,25 +126,25 @@ export async function POST(req: NextRequest) {
 
     const rawStrength = String(formData.get("strength") ?? "2");
     const strengthMap: Record<string, number> = {
-      "1": 2,
-      "2": 5,
-      "3": 8,
-      "4": 10,
+      "1": 3,
+      "2": 8,
+      "3": 12,
+      "4": 16,
       "5": 5,
       "6": 6,
       "7": 7,
       "8": 8,
       "9": 9,
       "10": 10,
-      "弱": 2,
-      "中": 5,
-      "強": 8,
-      "最強": 10,
+      "弱": 3,
+      "中": 8,
+      "強": 12,
+      "最強": 16,
     };
     const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
     const strength = Number.isFinite(parsedStrength)
-      ? Math.max(1, Math.min(10, parsedStrength))
-      : 5;
+      ? Math.max(1, Math.min(16, parsedStrength))
+      : 8;
 
     if (!file) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -185,10 +185,37 @@ export async function POST(req: NextRequest) {
       </svg>
     `);
 
+    const whiteOverlayOpacity = Math.min(0.94, 0.5 + strength * 0.028);
+    const whiteOverlay = await sharp({
+      create: {
+        width: region.width,
+        height: region.height,
+        channels: 4,
+        background: {
+          r: 255,
+          g: 255,
+          b: 255,
+          alpha: whiteOverlayOpacity,
+        },
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const applyWhiteFinish = async (input: Buffer) =>
+      sharp(input)
+        .modulate({
+          brightness: Math.min(1.22, 1.04 + strength * 0.01),
+          saturation: 0.08,
+        })
+        .composite([{ input: whiteOverlay, blend: "over" }])
+        .png()
+        .toBuffer();
+
     let regionBuffer: Buffer;
 
     if (mode === "ブラー") {
-      const sigma = Math.max(10, strength * 8);
+      const sigma = Math.max(14, strength * 10);
       regionBuffer = await sharp(bytes)
         .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
         .blur(sigma)
@@ -199,8 +226,9 @@ export async function POST(req: NextRequest) {
         .composite([{ input: makeMask(), blend: "dest-in" }])
         .png()
         .toBuffer();
+      regionBuffer = await applyWhiteFinish(regionBuffer);
     } else if (mode === "ガウス") {
-      const block = Math.max(18, Math.floor(16 * strength));
+      const block = Math.max(24, Math.floor(20 * strength));
       const downW = Math.max(2, Math.floor(region.width / block));
       const downH = Math.max(2, Math.floor(region.height / block));
 
@@ -208,7 +236,7 @@ export async function POST(req: NextRequest) {
         .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
         .resize(downW, downH, { kernel: "nearest" })
         .resize(region.width, region.height, { kernel: "nearest" })
-        .blur(Math.max(3, strength * 1.5))
+        .blur(Math.max(4, strength * 2))
         .png()
         .toBuffer();
 
@@ -216,17 +244,25 @@ export async function POST(req: NextRequest) {
         .composite([{ input: makeMask(), blend: "dest-in" }])
         .png()
         .toBuffer();
+      regionBuffer = await applyWhiteFinish(regionBuffer);
     } else {
-      const block = Math.max(18, Math.floor(22 * strength));
-      const downW = Math.max(3, Math.floor(region.width / block));
-      const downH = Math.max(3, Math.floor(region.height / block));
+      const block = Math.max(26, Math.floor(26 * strength));
+      const downW = Math.max(2, Math.floor(region.width / block));
+      const downH = Math.max(2, Math.floor(region.height / block));
 
       regionBuffer = await sharp(bytes)
         .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
         .resize(downW, downH, { kernel: "nearest" })
         .resize(region.width, region.height, { kernel: "nearest" })
+        .blur(Math.max(2, strength * 0.8))
         .png()
         .toBuffer();
+
+      regionBuffer = await sharp(regionBuffer)
+        .composite([{ input: makeMask(), blend: "dest-in" }])
+        .png()
+        .toBuffer();
+      regionBuffer = await applyWhiteFinish(regionBuffer);
     }
 
     const output = await sharp(bytes)
