@@ -814,16 +814,18 @@ export default function Home() {
 
             <div style={{ position: "relative", width: "100%", borderRadius: 12, overflow: "hidden", background: "#000" }}>
               <img src={mosaicSrc} alt="before" style={{ width: "100%", display: "block" }} />
-              <div
+              <img
+                src={mosaicImage}
+                alt="after"
                 style={{
                   position: "absolute",
                   inset: 0,
-                  width: `${mosaicCompare}%`,
-                  overflow: "hidden",
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  clipPath: `inset(0 ${100 - mosaicCompare}% 0 0)`,
                 }}
-              >
-                <img src={mosaicImage} alt="after" style={{ width: "100%", display: "block" }} />
-              </div>
+              />
               <div
                 style={{
                   position: "absolute",
