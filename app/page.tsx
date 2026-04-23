@@ -67,6 +67,9 @@ export default function Home() {
   const [mosaicStrength, setMosaicStrength] = useState("中");
   const [mosaicLoading, setMosaicLoading] = useState(false);
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
+  const [mosaicBox, setMosaicBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [mosaicStage, setMosaicStage] = useState("");
+  const [mosaicCompare, setMosaicCompare] = useState(50);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -108,58 +111,100 @@ export default function Home() {
     setAvatarProgress(0);
   };
 
+  const buildRegionBox = (
+    faceBox: { x: number; y: number; width: number; height: number },
+    area: string
+  ) => {
+    const padX = Math.round(faceBox.width * 0.08);
+    const padY = Math.round(faceBox.height * 0.1);
+    const faceX = Math.max(0, faceBox.x - padX);
+    const faceY = Math.max(0, faceBox.y - padY);
+    const faceW = Math.round(faceBox.width + padX * 2);
+    const faceH = Math.round(faceBox.height + padY * 1.5);
+
+    if (area === "目元のみ") {
+      return {
+        x: faceX,
+        y: faceY + Math.round(faceH * 0.12),
+        width: faceW,
+        height: Math.round(faceH * 0.28),
+      };
+    }
+
+    if (area === "口元のみ") {
+      return {
+        x: faceX + Math.round(faceW * 0.12),
+        y: faceY + Math.round(faceH * 0.56),
+        width: Math.round(faceW * 0.76),
+        height: Math.round(faceH * 0.24),
+      };
+    }
+
+    return {
+      x: faceX,
+      y: faceY,
+      width: faceW,
+      height: faceH,
+    };
+  };
+
   const applyMosaic = async (imageUrl: string, mode: "blur" | "gaussian") => {
     setMosaicLoading(true);
+    setMosaicStage("画像を読み込み中...");
     setMosaicImage(null);
     try {
       const res = await fetch(imageUrl);
       const blob = await res.blob();
       const file = new File([blob], "mosaic.jpg", { type: blob.type || "image/jpeg" });
 
+      setMosaicStage("顔を検出中...");
       const faceBox = await detectFirstFace(file);
       if (!faceBox) {
         alert("顔を検出できませんでした");
         setMosaicLoading(false);
+        setMosaicStage("");
         return;
       }
 
-      const padX = Math.round(faceBox.width * 0.06);
-      const padY = Math.round(faceBox.height * 0.08);
-      const faceX = Math.max(0, faceBox.x - padX);
-      const faceY = Math.max(0, faceBox.y - padY);
-      const faceW = faceBox.width + padX * 2;
-      const faceH = Math.round(faceBox.height + padY * 1.4);
+      const region = mosaicBox ?? buildRegionBox(faceBox, mosaicArea);
+      setMosaicBox(region);
 
-      let x = faceX, y = faceY, width = faceW, height = faceH;
+      const modeMap: Record<"blur" | "gaussian", string> = {
+        blur: "ブラー",
+        gaussian: "ガウス",
+      };
 
-      if (mosaicArea === "目元のみ") {
-        y = faceY;
-        height = Math.round(faceH * 0.42);
-      } else if (mosaicArea === "口元のみ") {
-        y = Math.round(faceY + faceH * 0.58);
-        height = Math.round(faceH * 0.35);
-      }
+      const strengthMap: Record<string, string> = {
+        "弱": "1",
+        "中": "2",
+        "強": "3",
+        "最強": "4",
+      };
 
-      const mosaicMode = mode === "blur" ? "ブラー" : "ガウス";
-      const strengthMap: Record<string, string> = { "弱": "1", "中": "2", "強": "3", "最強": "4" };
+      setMosaicStage(mode === "blur" ? "ブラー加工中..." : "ガウス加工中...");
+
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("mode", mosaicMode);
-      formData.append("x", String(x));
-      formData.append("y", String(y));
-      formData.append("width", String(width));
-      formData.append("height", String(height));
+      formData.append("mode", modeMap[mode]);
+      formData.append("boxMode", "region");
+      formData.append("x", String(region.x));
+      formData.append("y", String(region.y));
+      formData.append("width", String(region.width));
+      formData.append("height", String(region.height));
       formData.append("strength", strengthMap[mosaicStrength] ?? "2");
 
       const apiRes = await fetch("/api/mosaic", { method: "POST", body: formData });
       if (!apiRes.ok) throw new Error("モザイク処理失敗");
 
+      setMosaicStage("仕上げ中...");
       const resultBlob = await apiRes.blob();
       setMosaicImage(URL.createObjectURL(resultBlob));
+      setMosaicCompare(50);
     } catch (err: any) {
       alert(err.message || "モザイク処理に失敗しました");
     } finally {
       setMosaicLoading(false);
+      setMosaicStage("");
     }
   };
 
@@ -560,9 +605,32 @@ export default function Home() {
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
                   <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                     📁 画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); } }} style={{ display: "none" }} />
+                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); setMosaicBox(null); } }} style={{ display: "none" }} />
                   </label>
-                  {mosaicSrc && <img src={mosaicSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000", marginTop: 10 }} />}
+                  {mosaicSrc && (
+                    <div style={{ marginTop: 10, position: "relative", background: "#000", borderRadius: 8, overflow: "hidden" }}>
+                      <img
+                        src={mosaicSrc}
+                        alt="preview"
+                        style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", display: "block" }}
+                      />
+                      {mosaicBox && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: `${mosaicBox.x}px`,
+                            top: `${mosaicBox.y}px`,
+                            width: `${mosaicBox.width}px`,
+                            height: `${mosaicBox.height}px`,
+                            border: "2px solid #f0c85a",
+                            borderRadius: mosaicArea === "顔全体" ? "999px" : 10,
+                            boxShadow: "0 0 0 9999px rgba(0,0,0,0.16)",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -590,6 +658,12 @@ export default function Home() {
                     <button onClick={() => mosaicSrc && applyMosaic(mosaicSrc, "gaussian")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ガウス</button>
                   </div>
                 </div>
+
+                {mosaicLoading && (
+                  <div style={{ marginTop: 6, padding: "12px 14px", borderRadius: 8, background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.35)", color: "#6f5310", fontSize: 13, fontWeight: 700 }}>
+                    {mosaicStage || "加工中..."}
+                  </div>
+                )}
 
               </div>
             </div>
@@ -707,12 +781,106 @@ export default function Home() {
         </div>
       </div>
 
-      {mosaicImage && (
-        <div onClick={() => setMosaicImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-          <img src={mosaicImage} alt="mosaic" style={{ maxWidth: "90%", maxHeight: "70vh", borderRadius: 12 }} />
-          <div style={{ display: "flex", gap: 12 }}>
-            <a href={mosaicImage} download="mosaic.png" style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", color: "#071e28", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>保存</a>
-            <button onClick={() => setMosaicImage(null)} style={{ padding: "10px 24px", borderRadius: 8, background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>閉じる</button>
+      {mosaicImage && mosaicSrc && (
+        <div
+          onClick={() => setMosaicImage(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: "min(920px, 92vw)",
+              background: "#102733",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 14,
+              padding: 18,
+              display: "flex",
+              flexDirection: "column",
+              gap: 14,
+            }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#f0ece4" }}>Before / After</div>
+
+            <div style={{ position: "relative", width: "100%", borderRadius: 12, overflow: "hidden", background: "#000" }}>
+              <img src={mosaicSrc} alt="before" style={{ width: "100%", display: "block" }} />
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: `${mosaicCompare}%`,
+                  overflow: "hidden",
+                }}
+              >
+                <img src={mosaicImage} alt="after" style={{ width: "100%", display: "block" }} />
+              </div>
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${mosaicCompare}%`,
+                  width: 2,
+                  background: "#f0c85a",
+                  transform: "translateX(-1px)",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={mosaicCompare}
+                onChange={e => setMosaicCompare(Number(e.target.value))}
+                style={{ flex: 1 }}
+              />
+              <div style={{ minWidth: 44, fontSize: 12, color: "#c9a84c", fontWeight: 700 }}>{mosaicCompare}%</div>
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <a
+                href={mosaicImage}
+                download="mosaic.png"
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 8,
+                  background: "linear-gradient(135deg, #c9a84c, #8b6914)",
+                  color: "#071e28",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  textDecoration: "none",
+                }}
+              >
+                保存
+              </a>
+              <button
+                onClick={() => setMosaicImage(null)}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: 8,
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: "pointer",
+                }}
+              >
+                閉じる
+              </button>
+            </div>
           </div>
         </div>
       )}
