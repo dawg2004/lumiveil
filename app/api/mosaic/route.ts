@@ -20,12 +20,21 @@ export async function POST(req: NextRequest) {
       "2": 2,
       "3": 3,
       "4": 4,
+      "5": 5,
+      "6": 6,
+      "7": 7,
+      "8": 8,
+      "9": 9,
+      "10": 10,
       "弱": 1,
-      "中": 2,
-      "強": 3,
-      "最強": 4,
+      "中": 3,
+      "強": 6,
+      "最強": 10,
     };
-    const strength = strengthMap[rawStrength] ?? 2;
+    const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
+    const strength = Number.isFinite(parsedStrength)
+      ? Math.max(1, Math.min(10, parsedStrength))
+      : 3;
 
     if (!file) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -48,7 +57,7 @@ export async function POST(req: NextRequest) {
     let region: Buffer;
 
     if (mode === "ブラー") {
-      const sigma = Math.max(2, strength * 4);
+      const sigma = Math.max(3, strength * 3);
       region = await sharp(bytes)
         .extract({ left, top, width: safeWidth, height: safeHeight })
         .blur(sigma)
@@ -76,7 +85,7 @@ export async function POST(req: NextRequest) {
         .png()
         .toBuffer();
     } else if (mode === "ガウス") {
-      const sigma = Math.max(6, strength * 6);
+      const sigma = Math.max(6, strength * 4);
       region = await sharp(bytes)
         .extract({ left, top, width: safeWidth, height: safeHeight })
         .blur(sigma)
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest) {
         .png()
         .toBuffer();
     } else {
-      const block = Math.max(10, Math.floor(28 * strength));
+      const block = Math.max(12, Math.floor(18 * strength));
       const downW = Math.max(3, Math.floor(safeWidth / block));
       const downH = Math.max(3, Math.floor(safeHeight / block));
 
