@@ -53,63 +53,55 @@ export async function POST(req: NextRequest) {
     const top = Math.max(0, Math.floor(y));
     const safeWidth = Math.max(1, Math.min(Math.floor(width), imgW - left));
     const safeHeight = Math.max(1, Math.min(Math.floor(height), imgH - top));
+    const rx = safeWidth * Math.min(0.56, 0.4 + strength * 0.018);
+    const ry = safeHeight * Math.min(0.6, 0.46 + strength * 0.016);
+    const feather = Math.max(10, Math.min(30, 8 + strength * 2));
+
+    const makeMask = () => Buffer.from(`
+      <svg width="${safeWidth}" height="${safeHeight}">
+        <defs>
+          <filter id="blur"><feGaussianBlur stdDeviation="${feather}"/></filter>
+        </defs>
+        <ellipse
+          cx="${safeWidth / 2}"
+          cy="${safeHeight / 2}"
+          rx="${rx}"
+          ry="${ry}"
+          fill="white"
+          filter="url(#blur)"
+        />
+      </svg>
+    `);
 
     let region: Buffer;
 
     if (mode === "ブラー") {
-      const sigma = Math.max(3, strength * 3);
+      const sigma = Math.max(6, strength * 7);
       region = await sharp(bytes)
         .extract({ left, top, width: safeWidth, height: safeHeight })
         .blur(sigma)
         .png()
         .toBuffer();
 
-      const maskSvg = Buffer.from(`
-        <svg width="${safeWidth}" height="${safeHeight}">
-    <defs>
-      <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
-    </defs>
-    <ellipse
-      cx="${safeWidth / 2}"
-      cy="${safeHeight / 2}"
-      rx="${safeWidth * 0.36}"
-      ry="${safeHeight * 0.42}"
-      fill="white"
-      filter="url(#blur)"
-    />
-  </svg>
-      `);
-
       region = await sharp(region)
-        .composite([{ input: maskSvg, blend: "dest-in" }])
+        .composite([{ input: makeMask(), blend: "dest-in" }])
         .png()
         .toBuffer();
     } else if (mode === "ガウス") {
-      const sigma = Math.max(6, strength * 4);
+      const block = Math.max(12, Math.floor(12 * strength));
+      const downW = Math.max(2, Math.floor(safeWidth / block));
+      const downH = Math.max(2, Math.floor(safeHeight / block));
+
       region = await sharp(bytes)
         .extract({ left, top, width: safeWidth, height: safeHeight })
-        .blur(sigma)
+        .resize(downW, downH, { kernel: "nearest" })
+        .resize(safeWidth, safeHeight, { kernel: "nearest" })
+        .blur(Math.max(2, strength * 1.2))
         .png()
         .toBuffer();
 
-      const maskSvg = Buffer.from(`
-        <svg width="${safeWidth}" height="${safeHeight}">
-    <defs>
-      <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
-    </defs>
-    <ellipse
-      cx="${safeWidth / 2}"
-      cy="${safeHeight / 2}"
-      rx="${safeWidth * 0.36}"
-      ry="${safeHeight * 0.42}"
-      fill="white"
-      filter="url(#blur)"
-    />
-  </svg>
-      `);
-
       region = await sharp(region)
-        .composite([{ input: maskSvg, blend: "dest-in" }])
+        .composite([{ input: makeMask(), blend: "dest-in" }])
         .png()
         .toBuffer();
     } else {
