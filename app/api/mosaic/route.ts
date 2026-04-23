@@ -126,9 +126,9 @@ export async function POST(req: NextRequest) {
 
     const rawStrength = String(formData.get("strength") ?? "2");
     const strengthMap: Record<string, number> = {
-      "1": 1,
-      "2": 3,
-      "3": 6,
+      "1": 2,
+      "2": 5,
+      "3": 8,
       "4": 10,
       "5": 5,
       "6": 6,
@@ -136,15 +136,15 @@ export async function POST(req: NextRequest) {
       "8": 8,
       "9": 9,
       "10": 10,
-      "弱": 1,
-      "中": 3,
-      "強": 6,
+      "弱": 2,
+      "中": 5,
+      "強": 8,
       "最強": 10,
     };
     const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
     const strength = Number.isFinite(parsedStrength)
       ? Math.max(1, Math.min(10, parsedStrength))
-      : 3;
+      : 5;
 
     if (!file) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
     let regionBuffer: Buffer;
 
     if (mode === "ブラー") {
-      const sigma = Math.max(6, strength * 7);
+      const sigma = Math.max(10, strength * 8);
       regionBuffer = await sharp(bytes)
         .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
         .blur(sigma)
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
         .png()
         .toBuffer();
     } else if (mode === "ガウス") {
-      const block = Math.max(12, Math.floor(12 * strength));
+      const block = Math.max(18, Math.floor(16 * strength));
       const downW = Math.max(2, Math.floor(region.width / block));
       const downH = Math.max(2, Math.floor(region.height / block));
 
@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
         .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
         .resize(downW, downH, { kernel: "nearest" })
         .resize(region.width, region.height, { kernel: "nearest" })
-        .blur(Math.max(2, strength * 1.2))
+        .blur(Math.max(3, strength * 1.5))
         .png()
         .toBuffer();
 
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
         .png()
         .toBuffer();
     } else {
-      const block = Math.max(12, Math.floor(18 * strength));
+      const block = Math.max(18, Math.floor(22 * strength));
       const downW = Math.max(3, Math.floor(region.width / block));
       const downH = Math.max(3, Math.floor(region.height / block));
 
