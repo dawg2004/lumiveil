@@ -180,11 +180,12 @@ async function buildSoftMask(
   blurMask: number,
   maskShape: MaskShape
 ) {
+  const filterPad = blurMask * 3;
   const facePath = [
     `M ${width * 0.5} ${height * 0.05}`,
-    `C ${width * 0.23} ${height * 0.05}, ${width * 0.1} ${height * 0.26}, ${width * 0.12} ${height * 0.5}`,
-    `C ${width * 0.14} ${height * 0.76}, ${width * 0.32} ${height * 0.95}, ${width * 0.5} ${height * 0.99}`,
-    `C ${width * 0.68} ${height * 0.95}, ${width * 0.86} ${height * 0.76}, ${width * 0.88} ${height * 0.5}`,
+    `C ${width * 0.23} ${height * 0.05}, ${width * 0.1} ${height * 0.26}, ${width * 0.12} ${height * 0.48}`,
+    `C ${width * 0.14} ${height * 0.72}, ${width * 0.33} ${height * 0.9}, ${width * 0.5} ${height * 0.94}`,
+    `C ${width * 0.67} ${height * 0.9}, ${width * 0.86} ${height * 0.72}, ${width * 0.88} ${height * 0.48}`,
     `C ${width * 0.9} ${height * 0.26}, ${width * 0.77} ${height * 0.05}, ${width * 0.5} ${height * 0.05} Z`,
   ].join(" ");
   const capsuleX = width * 0.12;
@@ -210,7 +211,15 @@ async function buildSoftMask(
     >
       <rect width="100%" height="100%" fill="black" fill-opacity="0" />
       <defs>
-        <filter id="soft">
+        <filter
+          id="soft"
+          x="${-filterPad}"
+          y="${-filterPad}"
+          width="${width + filterPad * 2}"
+          height="${height + filterPad * 2}"
+          filterUnits="userSpaceOnUse"
+          color-interpolation-filters="sRGB"
+        >
           <feGaussianBlur stdDeviation="${blurMask}" />
         </filter>
       </defs>
