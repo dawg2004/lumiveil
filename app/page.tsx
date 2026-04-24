@@ -20,8 +20,8 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
 
 const AREAS = ["顔全体", "目元のみ", "口元のみ"] as const;
 const STRENGTHS = ["弱", "中", "強", "最強"] as const;
-const NUDGE_STEP = 4;
-const RESIZE_STEP = 8;
+const NUDGE_STEP = 2;
+const RESIZE_STEP = 4;
 
 export default function Home() {
   const [tab, setTab] = useState<TabId>("mosaic");
@@ -185,6 +185,10 @@ export default function Home() {
         formData.append("y", String(mosaicBox.y));
         formData.append("width", String(mosaicBox.width));
         formData.append("height", String(mosaicBox.height));
+        formData.append(
+          "scope",
+          mosaicArea === "顔全体" ? "face" : mosaicArea === "目元のみ" ? "eyes_only" : "bust_up"
+        );
         formData.append("strength", strengthMap[mosaicStrength]);
 
         const apiRes = await fetch("/api/mosaic", { method: "POST", body: formData });
@@ -388,7 +392,7 @@ export default function Home() {
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                     <div>
                       <div style={sectionLabelStyle}>検出枠の調整</div>
-                      <div style={{ fontSize: 11, color: "#6a6258" }}>移動 4px / サイズ 8px ずつ</div>
+                      <div style={{ fontSize: 11, color: "#6a6258" }}>移動 2px / サイズ 4px ずつ</div>
                     </div>
                     <button onClick={() => void redetectMosaicFace()} style={smallButtonStyle}>
                       顔を再検出
