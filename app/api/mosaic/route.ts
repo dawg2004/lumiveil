@@ -4,7 +4,7 @@ import sharp from "sharp";
 export const runtime = "nodejs";
 
 type Scope = "face" | "eyes_only" | "bust_up";
-type Mode = "ブラー" | "ガウス" | "モザイク";
+type Style = "blur" | "lens" | "mosaic";
 
 type Region = {
   left: number;
@@ -14,7 +14,6 @@ type Region = {
   ellipseRx: number;
   ellipseRy: number;
   blurMask: number;
-  scope: Scope;
 };
 
 function clampRegion(
@@ -27,14 +26,8 @@ function clampRegion(
 ) {
   const safeLeft = Math.max(0, Math.min(Math.floor(left), imageWidth - 1));
   const safeTop = Math.max(0, Math.min(Math.floor(top), imageHeight - 1));
-  const safeWidth = Math.max(
-    1,
-    Math.min(Math.floor(width), imageWidth - safeLeft)
-  );
-  const safeHeight = Math.max(
-    1,
-    Math.min(Math.floor(height), imageHeight - safeTop)
-  );
+  const safeWidth = Math.max(1, Math.min(Math.floor(width), imageWidth - safeLeft));
+  const safeHeight = Math.max(1, Math.min(Math.floor(height), imageHeight - safeTop));
 
   return {
     left: safeLeft,
@@ -44,282 +37,262 @@ function clampRegion(
   };
 }
 
-function regionFromDirectBox(
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  imageWidth: number,
-  imageHeight: number,
-  scope: Scope
-): Region {
-  const base = clampRegion(x, y, width, height, imageWidth, imageHeight);
+function regionForScope(scope: Scope, width: number, height: number): Region {
+  if (scope === "eyes_only") {
+    return {
+      left: Math.floor(width * 0.2),
+      top: Math.floor(height * 0.22),
+      width: Math.max(1, Math.floor(width * 0.6)),
+      height: Math.max(1, Math.floor(height * 0.22)),
+      ellipseRx: 0.46,
+      ellipseRy: 0.4,
+      blurMask: 12,
+    };
+  }
+
+  if (scope === "bust_up") {
+    return {
+      left: Math.floor(width * 0.14),
+      top: Math.floor(height * 0.08),
+      width: Math.max(1, Math.floor(width * 0.72)),
+      height: Math.max(1, Math.floor(height * 0.68)),
+      ellipseRx: 0.48,
+      ellipseRy: 0.48,
+      blurMask: 16,
+    };
+  }
 
   return {
-    ...base,
-    ellipseRx: scope === "eyes_only" ? 0.46 : scope === "bust_up" ? 0.47 : 0.39,
-    ellipseRy: scope === "eyes_only" ? 0.32 : scope === "bust_up" ? 0.5 : 0.53,
-    blurMask: scope === "eyes_only" ? 18 : scope === "bust_up" ? 24 : 26,
-    scope,
+    left: Math.floor(width * 0.2),
+    top: Math.floor(height * 0.12),
+    width: Math.max(1, Math.floor(width * 0.6)),
+    height: Math.max(1, Math.floor(height * 0.62)),
+    ellipseRx: 0.42,
+    ellipseRy: 0.46,
+    blurMask: 14,
   };
 }
 
-function regionFromFaceBox(
+function regionForFaceBox(
+  scope: Scope,
+  imageWidth: number,
+  imageHeight: number,
   x: number,
   y: number,
   width: number,
-  height: number,
-  imageWidth: number,
-  imageHeight: number,
-  scope: Scope
+  height: number
 ): Region {
+  const padX = width * 0.08;
+  const padY = height * 0.1;
+  const faceX = x - padX;
+  const faceY = y - padY;
+  const faceWidth = width + padX * 2;
+  const faceHeight = height + padY * 1.5;
+
   if (scope === "eyes_only") {
     return {
       ...clampRegion(
-        x + width * 0.12,
-        y + height * 0.2,
-        width * 0.76,
-        height * 0.24,
+        faceX + faceWidth * 0.14,
+        faceY + faceHeight * 0.2,
+        faceWidth * 0.72,
+        faceHeight * 0.2,
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.46,
-      ellipseRy: 0.32,
+      ellipseRx: 0.36,
+      ellipseRy: 0.42,
       blurMask: 18,
-      scope,
     };
   }
 
   if (scope === "bust_up") {
     return {
       ...clampRegion(
-        x - width * 0.42,
-        y - height * 0.18,
-        width * 1.84,
-        height * 2.2,
+        faceX + faceWidth * 0.22,
+        faceY + faceHeight * 0.62,
+        faceWidth * 0.56,
+        faceHeight * 0.16,
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.47,
-      ellipseRy: 0.5,
-      blurMask: 24,
-      scope,
+      ellipseRx: 0.36,
+      ellipseRy: 0.42,
+      blurMask: 18,
     };
   }
 
   return {
-    ...clampRegion(
-      x - width * 0.15,
-      y - height * 0.18,
-      width * 1.3,
-      height * 1.45,
-      imageWidth,
-      imageHeight
-    ),
-    ellipseRx: 0.39,
-    ellipseRy: 0.53,
-    blurMask: 26,
-    scope,
+    ...clampRegion(faceX, faceY, faceWidth, faceHeight, imageWidth, imageHeight),
+    ellipseRx: 0.36,
+    ellipseRy: 0.42,
+    blurMask: 18,
   };
 }
 
-function getStrength(rawStrength: string) {
+function parseStrength(rawStrength: string) {
   const strengthMap: Record<string, number> = {
-    "1": 2,
-    "2": 4,
-    "3": 6,
-    "4": 8,
-    "5": 10,
-    "6": 12,
-    "7": 14,
-    "8": 16,
-    "9": 18,
-    "10": 20,
-    弱: 3,
-    中: 6,
-    強: 10,
-    最強: 16,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    弱: 1,
+    中: 3,
+    強: 4,
+    最強: 5,
   };
 
   const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
   return Number.isFinite(parsedStrength)
-    ? Math.max(1, Math.min(20, parsedStrength))
-    : 6;
+    ? Math.max(1, Math.min(5, parsedStrength))
+    : 3;
 }
 
-function buildMaskShape(region: Region) {
-  if (region.scope === "eyes_only") {
-    const rx = region.width * region.ellipseRx;
-    const ry = Math.max(region.height * region.ellipseRy, region.height * 0.34);
-    const x = region.width / 2 - rx;
-    const y = region.height / 2 - ry;
-    const width = rx * 2;
-    const height = ry * 2;
-    const rounded = Math.min(height * 0.95, width * 0.28);
+function parseStyle(formData: FormData): Style {
+  const style = String(formData.get("style") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "").trim();
+  const raw = style || mode;
 
-    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${rounded}" ry="${rounded}" fill="white" filter="url(#soft)" />`;
+  if (raw === "blur" || raw === "ブラー") {
+    return "blur";
   }
 
-  if (region.scope === "bust_up") {
-    return `<ellipse cx="${region.width / 2}" cy="${region.height / 2}" rx="${region.width * region.ellipseRx}" ry="${region.height * region.ellipseRy}" fill="white" filter="url(#soft)" />`;
+  if (raw === "lens" || raw === "gaussian" || raw === "ガウス") {
+    return "lens";
   }
 
-  const w = region.width;
-  const h = region.height;
-  const path = [
-    `M ${w * 0.28} ${h * 0.16}`,
-    `C ${w * 0.2} ${h * 0.2}, ${w * 0.15} ${h * 0.34}, ${w * 0.15} ${h * 0.5}`,
-    `C ${w * 0.15} ${h * 0.72}, ${w * 0.24} ${h * 0.88}, ${w * 0.37} ${h * 0.96}`,
-    `C ${w * 0.45} ${h * 1.0}, ${w * 0.55} ${h * 1.0}, ${w * 0.63} ${h * 0.96}`,
-    `C ${w * 0.76} ${h * 0.88}, ${w * 0.85} ${h * 0.72}, ${w * 0.85} ${h * 0.5}`,
-    `C ${w * 0.85} ${h * 0.34}, ${w * 0.8} ${h * 0.2}, ${w * 0.72} ${h * 0.16}`,
-    `C ${w * 0.63} ${h * 0.06}, ${w * 0.37} ${h * 0.06}, ${w * 0.28} ${h * 0.16}`,
-    "Z",
-  ].join(" ");
-
-  return `<path d="${path}" fill="white" filter="url(#soft)" />`;
+  return "mosaic";
 }
 
-function buildMaskSvg(region: Region) {
-  return Buffer.from(`
+async function applyBlur(
+  source: Buffer,
+  style: Style,
+  strength: number,
+  width: number,
+  height: number,
+  ellipseRx: number,
+  ellipseRy: number,
+  blurMask: number
+) {
+  const sigma = style === "lens" ? Math.max(6, strength * 4) : Math.max(3, strength * 3);
+
+  const region = await sharp(source).blur(sigma).ensureAlpha().png().toBuffer();
+
+  const maskSvg = Buffer.from(`
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="${region.width}"
-      height="${region.height}"
-      viewBox="0 0 ${region.width} ${region.height}"
+      width="${width}"
+      height="${height}"
+      viewBox="0 0 ${width} ${height}"
     >
       <rect width="100%" height="100%" fill="black" fill-opacity="0" />
       <defs>
         <filter id="soft">
-          <feGaussianBlur stdDeviation="${region.blurMask}" />
+          <feGaussianBlur stdDeviation="${blurMask}" />
         </filter>
       </defs>
-      ${buildMaskShape(region)}
+      <ellipse
+        cx="${width / 2}"
+        cy="${height / 2}"
+        rx="${width * ellipseRx}"
+        ry="${height * ellipseRy}"
+        fill="white"
+        filter="url(#soft)"
+      />
     </svg>
   `);
-}
 
-async function applySoftMask(input: Buffer, region: Region) {
-  const alphaMask = await sharp(buildMaskSvg(region))
-    .resize(region.width, region.height)
+  const alphaMask = await sharp(maskSvg)
+    .resize(width, height)
     .ensureAlpha()
     .extractChannel("alpha")
     .toBuffer();
 
-  return sharp(input).ensureAlpha().joinChannel(alphaMask).png().toBuffer();
+  return sharp(region).joinChannel(alphaMask).png().toBuffer();
 }
 
-async function processBlur(bytes: Buffer, region: Region, strength: number) {
-  const sigma = Math.max(8, strength * 1.8);
-  const blurred = await sharp(bytes)
-    .extract({
-      left: region.left,
-      top: region.top,
-      width: region.width,
-      height: region.height,
-    })
-    .blur(sigma)
-    .png()
-    .toBuffer();
+async function applyPixelate(source: Buffer, strength: number, width: number, height: number) {
+  const block = Math.max(12, Math.floor(16 * strength));
+  const downW = Math.max(3, Math.floor(width / block));
+  const downH = Math.max(3, Math.floor(height / block));
 
-  return applySoftMask(blurred, region);
-}
-
-async function processGaussian(bytes: Buffer, region: Region, strength: number) {
-  const block = Math.max(10, Math.floor(8 + strength * 1.4));
-  const downW = Math.max(2, Math.floor(region.width / block));
-  const downH = Math.max(2, Math.floor(region.height / block));
-
-  const pixelated = await sharp(bytes)
-    .extract({
-      left: region.left,
-      top: region.top,
-      width: region.width,
-      height: region.height,
-    })
+  return sharp(source)
     .resize(downW, downH, { kernel: "nearest" })
-    .resize(region.width, region.height, { kernel: "nearest" })
-    .blur(Math.max(2, strength * 0.35))
+    .resize(width, height, { kernel: "nearest" })
     .png()
     .toBuffer();
-
-  return applySoftMask(pixelated, region);
-}
-
-async function processMosaic(bytes: Buffer, region: Region, strength: number) {
-  const block = Math.max(12, Math.floor(10 + strength * 1.6));
-  const downW = Math.max(2, Math.floor(region.width / block));
-  const downH = Math.max(2, Math.floor(region.height / block));
-
-  const pixelated = await sharp(bytes)
-    .extract({
-      left: region.left,
-      top: region.top,
-      width: region.width,
-      height: region.height,
-    })
-    .resize(downW, downH, { kernel: "nearest" })
-    .resize(region.width, region.height, { kernel: "nearest" })
-    .png()
-    .toBuffer();
-
-  return applySoftMask(pixelated, region);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    const mode = String(formData.get("mode") ?? "モザイク") as Mode;
-    const boxMode = String(formData.get("boxMode") ?? "face");
+    const file = formData.get("file");
     const scope = String(formData.get("scope") ?? "face") as Scope;
+    const style = parseStyle(formData);
+    const boxMode = String(formData.get("boxMode") ?? "");
+    const x = Number(formData.get("x"));
+    const y = Number(formData.get("y"));
+    const width = Number(formData.get("width"));
+    const height = Number(formData.get("height"));
+    const strength = parseStrength(String(formData.get("strength") ?? "3"));
 
-    const x = Number(formData.get("x") ?? 0);
-    const y = Number(formData.get("y") ?? 0);
-    const width = Number(formData.get("width") ?? 0);
-    const height = Number(formData.get("height") ?? 0);
-    const strength = getStrength(String(formData.get("strength") ?? "2"));
-
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
     }
 
     const bytes = Buffer.from(await file.arrayBuffer());
     const meta = await sharp(bytes).metadata();
-    const imgW = meta.width ?? 0;
-    const imgH = meta.height ?? 0;
+    const imageWidth = meta.width ?? 0;
+    const imageHeight = meta.height ?? 0;
 
-    if (!imgW || !imgH) {
+    if (!imageWidth || !imageHeight) {
       return NextResponse.json({ error: "invalid image" }, { status: 400 });
     }
 
     const region =
-      Number.isFinite(x) &&
-      Number.isFinite(y) &&
-      Number.isFinite(width) &&
-      Number.isFinite(height)
+      Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height)
         ? boxMode === "region"
-          ? regionFromDirectBox(x, y, width, height, imgW, imgH, scope)
-          : regionFromFaceBox(x, y, width, height, imgW, imgH, scope)
-        : regionFromDirectBox(
-            imgW * 0.2,
-            imgH * 0.12,
-            imgW * 0.6,
-            imgH * 0.62,
-            imgW,
-            imgH,
-            scope
+          ? {
+              ...clampRegion(x, y, width, height, imageWidth, imageHeight),
+              ellipseRx: 0.36,
+              ellipseRy: 0.42,
+              blurMask: 18,
+            }
+          : regionForFaceBox(scope, imageWidth, imageHeight, x, y, width, height)
+        : regionForScope(scope, imageWidth, imageHeight);
+
+    const extracted = await sharp(bytes)
+      .extract({
+        left: region.left,
+        top: region.top,
+        width: region.width,
+        height: region.height,
+      })
+      .png()
+      .toBuffer();
+
+    const regionOutput =
+      style === "mosaic"
+        ? await applyPixelate(extracted, strength, region.width, region.height)
+        : await applyBlur(
+            extracted,
+            style,
+            strength,
+            region.width,
+            region.height,
+            region.ellipseRx,
+            region.ellipseRy,
+            region.blurMask
           );
 
-    const regionBuffer =
-      mode === "ブラー"
-        ? await processBlur(bytes, region, strength)
-        : mode === "ガウス"
-          ? await processGaussian(bytes, region, strength)
-          : await processMosaic(bytes, region, strength);
-
     const output = await sharp(bytes)
-      .composite([{ input: regionBuffer, left: region.left, top: region.top }])
+      .composite([
+        {
+          input: regionOutput,
+          left: region.left,
+          top: region.top,
+        },
+      ])
       .png()
       .toBuffer();
 
@@ -330,7 +303,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("mosaic error:", error);
+    console.error("mosaic route failed", error);
     return NextResponse.json({ error: "mosaic failed" }, { status: 500 });
   }
 }
