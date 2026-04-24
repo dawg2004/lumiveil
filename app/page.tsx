@@ -260,6 +260,21 @@ export default function Home() {
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.12em", color: "#f0ece4" }}>LUMIVEIL</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <a
+            href="/gpts"
+            style={{
+              padding: "8px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(201,168,76,0.35)",
+              background: "rgba(201,168,76,0.08)",
+              color: "#f0ece4",
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            GPTs 版を開く
+          </a>
           <div style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#c9a84c" }}>
             ◆ {credits} クレジット
           </div>
@@ -388,9 +403,8 @@ export default function Home() {
                 )}
                 {step !== "generating" && step !== "done" && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 320, gap: 12, color: "#555" }}>
-                    <div style={{ fontSize: 48 }}>◈</div>
-                    <div style={{ fontSize: 13 }}>設定を選択して生成ボタンを押してください</div>
-                    <div style={{ fontSize: 11, color: "#777" }}>1枚 = 1クレジット</div>
+                    <div style={{ fontSize: 48 }}>✦</div>
+                    <div style={{ fontSize: 13 }}>生成画像はここに表示されます</div>
                   </div>
                 )}
               </div>
@@ -398,198 +412,60 @@ export default function Home() {
           )}
 
           {tab === "avatar" && (
-            <div>
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>キャスト登録</div>
-                <div style={{ fontSize: 12, color: "#aaa" }}>写真をアップロードしてAIがキャストの特徴を学習します。</div>
-              </div>
-              <div className="two-col" style={{ display: "grid", gap: 20 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
-                    <div style={{ fontSize: 11, color: "#444", marginBottom: 10 }}>キャスト名</div>
-                    <input value={castName} onChange={e => setCastName(e.target.value)}
-                      placeholder="例：藍原あの_新宿"
-                      style={{ width: "100%", background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e", borderRadius: 8, color: "#111", padding: "10px 12px", fontSize: 13 }}
-                    />
-                  </div>
-                  <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
-                    <div style={{ fontSize: 11, color: "#444", marginBottom: 10 }}>写真アップロード</div>
-                    <div
-                      onDragOver={e => e.preventDefault()} onDrop={handleDrop}
-                      onClick={() => inputRef.current?.click()}
-                      style={{ border: "2px dashed #1e4d5f", borderRadius: 12, padding: "28px 20px", textAlign: "center", cursor: "pointer", background: "rgba(0,0,0,0.04)" }}
-                    >
-                      <input ref={inputRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={e => setFiles(prev => [...prev, ...Array.from(e.target.files || [])].slice(0, 15))} />
-                      <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-                      <div style={{ color: "#c9a84c", fontWeight: 600, fontSize: 14 }}>写真をドロップ または クリック</div>
-                      <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>顔がはっきり写った写真を3〜15枚</div>
-                    </div>
-                    {files.length > 0 && (
-                      <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {files.map((f, i) => (
-                          <div key={i} style={{ position: "relative" }}>
-                            <img src={URL.createObjectURL(f)} alt="" style={{ width: 60, height: 60, objectFit: "cover", borderRadius: 8 }} />
-                            <button onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} style={{ position: "absolute", top: -6, right: -6, width: 18, height: 18, borderRadius: "50%", background: "#e05252", border: "none", color: "#fff", fontSize: 10, cursor: "pointer" }}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={handleCreateAvatar} disabled={files.length < 1 || avatarCreating || !castName} style={{
-                    width: "100%", padding: "13px 0",
-                    background: files.length >= 1 && castName && !avatarCreating ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)",
-                    border: "none", borderRadius: 10, color: files.length >= 1 && castName ? "#071e28" : "#555", fontWeight: 700, fontSize: 14, cursor: "pointer",
-                  }}>
-                    {avatarCreating ? `学習中... ${Math.round(avatarProgress)}%` : "キャスト登録"}
-                  </button>
-                  {avatarCreating && (
-                    <div style={{ height: 4, background: "#1a3d4d", borderRadius: 2 }}>
-                      <div style={{ height: "100%", width: `${avatarProgress}%`, background: "linear-gradient(90deg, #c9a84c, #f0d080)", borderRadius: 2, transition: "width 0.3s" }} />
-                    </div>
-                  )}
+            <div className="two-col" style={{ display: "grid", gap: 20 }}>
+              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ fontSize: 11, color: "#444", letterSpacing: "0.05em" }}>キャスト登録</div>
+                <input value={castName} onChange={e => setCastName(e.target.value)} placeholder="キャスト名" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13 }} />
+                <div onDrop={handleDrop} onDragOver={e => e.preventDefault()} style={{ border: "1px dashed #8a8174", borderRadius: 10, padding: 18, background: "rgba(0,0,0,0.03)", textAlign: "center", color: "#444" }}>
+                  <div style={{ fontSize: 13, marginBottom: 8 }}>画像をドラッグ&ドロップ</div>
+                  <div style={{ fontSize: 11, marginBottom: 10 }}>または</div>
+                  <button onClick={() => inputRef.current?.click()} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #a89e8e", background: "#b0a898", color: "#111", fontSize: 12, cursor: "pointer" }}>画像を選択</button>
+                  <input ref={inputRef} type="file" accept="image/*" multiple onChange={e => setFiles(prev => [...prev, ...(Array.from(e.target.files || []).slice(0, 15 - prev.length))])} style={{ display: "none" }} />
                 </div>
-
-                <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 14 }}>登録済みキャスト</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {avatars.map(av => (
-                      <div
-                        key={av.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "12px 14px",
-                          borderRadius: 8,
-                          background: "rgba(0,0,0,0.04)",
-                          border: "1px solid #a89e8e",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: 10,
-                            background: "rgba(0,0,0,0.08)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 22,
-                          }}
-                        >
-                          👤
-                        </div>
-
-                        <div style={{ flex: 1 }}>
-                          {editingId === av.id ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                              <input
-                                value={editingName}
-                                onChange={e => setEditingName(e.target.value)}
-                                onKeyDown={e => {
-                                  if (e.key === "Enter") saveEditingAvatar(av.id);
-                                  if (e.key === "Escape") cancelEditingAvatar();
-                                }}
-                                autoFocus
-                                style={{
-                                  width: "100%",
-                                  fontSize: 13,
-                                  fontWeight: 500,
-                                  border: "1px solid #c9a84c",
-                                  borderRadius: 6,
-                                  padding: "6px 8px",
-                                  background: "#fff8e6",
-                                  color: "#111",
-                                }}
-                              />
-                              <div style={{ display: "flex", gap: 6 }}>
-                                <button
-                                  onClick={() => saveEditingAvatar(av.id)}
-                                  style={{
-                                    padding: "5px 10px",
-                                    borderRadius: 6,
-                                    background: "rgba(201,168,76,0.15)",
-                                    border: "1px solid rgba(201,168,76,0.4)",
-                                    color: "#8b6914",
-                                    fontSize: 10,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  保存
-                                </button>
-                                <button
-                                  onClick={cancelEditingAvatar}
-                                  style={{
-                                    padding: "5px 10px",
-                                    borderRadius: 6,
-                                    background: "rgba(100,100,100,0.08)",
-                                    border: "1px solid rgba(100,100,100,0.25)",
-                                    color: "#555",
-                                    fontSize: 10,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  キャンセル
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              <div style={{ fontSize: 13, fontWeight: 500, color: "#111" }}>
-                                {av.name}
-                              </div>
-                              <div style={{ fontSize: 10, color: "#555" }}>登録日 {av.date}</div>
-                            </>
-                          )}
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            setSelectedAvatar(av.id);
-                            setTab("generate");
-                          }}
-                          style={{
-                            padding: "5px 10px",
-                            borderRadius: 6,
-                            background: "rgba(201,168,76,0.1)",
-                            border: "1px solid rgba(201,168,76,0.3)",
-                            color: "#c9a84c",
-                            fontSize: 10,
-                            cursor: "pointer",
-                          }}
-                        >
-                          選択
-                        </button>
-
-                        {editingId === av.id ? null : (
-                          <button
-                            onClick={() => startEditingAvatar(av.id, av.name)}
-                            style={{
-                              padding: "5px 10px",
-                              borderRadius: 6,
-                              background: "rgba(100,100,100,0.1)",
-                              border: "1px solid rgba(100,100,100,0.3)",
-                              color: "#555",
-                              fontSize: 10,
-                              cursor: "pointer",
-                            }}
-                          >
-                            編集
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                {files.length > 0 && <div style={{ fontSize: 11, color: "#444" }}>{files.length}枚選択中</div>}
+                {avatarCreating && (
+                  <div style={{ width: "100%", height: 8, background: "#a89e8e", borderRadius: 999, overflow: "hidden" }}>
+                    <div style={{ width: `${avatarProgress}%`, height: "100%", background: "linear-gradient(90deg, #c9a84c, #f0d080)" }} />
                   </div>
+                )}
+                <button onClick={handleCreateAvatar} disabled={avatarCreating || !castName || files.length === 0} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: castName && files.length ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)", color: castName && files.length ? "#071e28" : "#555", fontWeight: 700, fontSize: 13, cursor: castName && files.length ? "pointer" : "not-allowed" }}>
+                  {avatarCreating ? "登録中..." : "キャストを登録する"}
+                </button>
+              </div>
+
+              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
+                <div style={{ fontSize: 11, color: "#444", marginBottom: 12, letterSpacing: "0.05em" }}>登録済みキャスト</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {avatars.map(av => (
+                    <div key={av.id} style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      {editingId === av.id ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
+                          <input value={editingName} onChange={e => setEditingName(e.target.value)} style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13 }} />
+                          <button onClick={() => saveEditingAvatar(av.id)} style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: "#c9a84c", color: "#071e28", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>保存</button>
+                          <button onClick={cancelEditingAvatar} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "transparent", color: "#333", fontSize: 12, cursor: "pointer" }}>取消</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <div style={{ fontSize: 22 }}>👤</div>
+                            <div>
+                              <div style={{ fontWeight: 600, color: "#111", fontSize: 13 }}>{av.name}</div>
+                              <div style={{ fontSize: 10, color: "#444" }}>{av.date}</div>
+                            </div>
+                          </div>
+                          <button onClick={() => startEditingAvatar(av.id, av.name)} style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#b0a898", color: "#111", fontSize: 12, cursor: "pointer" }}>編集</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           )}
 
           {tab === "mosaic" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>モザイク加工</div>
+            <div className="two-col" style={{ display: "grid", gap: 20 }}>
               <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
-
                 <div>
                   <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>キャストを選択</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
