@@ -44,8 +44,8 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
       top: Math.floor(height * 0.22),
       width: Math.max(1, Math.floor(width * 0.6)),
       height: Math.max(1, Math.floor(height * 0.22)),
-      ellipseRx: 0.46,
-      ellipseRy: 0.4,
+      ellipseRx: 0.34,
+      ellipseRy: 0.3,
       blurMask: 18,
     };
   }
@@ -56,9 +56,9 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
       top: Math.floor(height * 0.08),
       width: Math.max(1, Math.floor(width * 0.72)),
       height: Math.max(1, Math.floor(height * 0.68)),
-      ellipseRx: 0.48,
-      ellipseRy: 0.48,
-      blurMask: 22,
+      ellipseRx: 0.32,
+      ellipseRy: 0.4,
+      blurMask: 26,
     };
   }
 
@@ -67,8 +67,8 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
     top: Math.floor(height * 0.12),
     width: Math.max(1, Math.floor(width * 0.6)),
     height: Math.max(1, Math.floor(height * 0.62)),
-    ellipseRx: 0.42,
-    ellipseRy: 0.46,
+    ellipseRx: 0.32,
+    ellipseRy: 0.4,
     blurMask: 20,
   };
 }
@@ -99,9 +99,9 @@ function regionForFaceBox(
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.36,
-      ellipseRy: 0.42,
-      blurMask: 24,
+      ellipseRx: 0.28,
+      ellipseRy: 0.3,
+      blurMask: 28,
     };
   }
 
@@ -115,16 +115,16 @@ function regionForFaceBox(
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.36,
-      ellipseRy: 0.42,
-      blurMask: 22,
+      ellipseRx: 0.28,
+      ellipseRy: 0.3,
+      blurMask: 26,
     };
   }
 
   return {
     ...clampRegion(faceX, faceY, faceWidth, faceHeight, imageWidth, imageHeight),
-    ellipseRx: 0.36,
-    ellipseRy: 0.42,
+    ellipseRx: 0.3,
+    ellipseRy: 0.38,
     blurMask: 24,
   };
 }
@@ -284,9 +284,9 @@ export async function POST(req: NextRequest) {
         ? boxMode === "region"
           ? {
               ...clampRegion(x, y, width, height, imageWidth, imageHeight),
-              ellipseRx: 0.36,
-              ellipseRy: 0.42,
-              blurMask: 24,
+              ellipseRx: 0.28,
+              ellipseRy: 0.3,
+              blurMask: 28,
             }
           : regionForFaceBox(scope, imageWidth, imageHeight, x, y, width, height)
         : regionForScope(scope, imageWidth, imageHeight);
