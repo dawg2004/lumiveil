@@ -1,6 +1,6 @@
 "use client";
 
-import { detectFirstFace } from "@/lib/faceDetector";
+import { detectFaceRegions, type FaceRegions } from "@/lib/faceDetector";
 import { type CSSProperties, useCallback, useState } from "react";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "plan";
@@ -9,13 +9,13 @@ type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian";
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: "generate", label: "画像生成", icon: "✦" },
-  { id: "avatar", label: "キャスト登録", icon: "◈" },
-  { id: "mosaic", label: "モザイク", icon: "⊞" },
-  { id: "edit", label: "AI編集", icon: "✎" },
-  { id: "video", label: "動画生成", icon: "▶" },
-  { id: "history", label: "履歴", icon: "◎" },
-  { id: "plan", label: "プラン", icon: "◇" },
+  { id: "generate", label: "画像生成", icon: "*" },
+  { id: "avatar", label: "キャスト登録", icon: "A" },
+  { id: "mosaic", label: "モザイク", icon: "M" },
+  { id: "edit", label: "AI編集", icon: "E" },
+  { id: "video", label: "動画生成", icon: "V" },
+  { id: "history", label: "履歴", icon: "H" },
+  { id: "plan", label: "プラン", icon: "P" },
 ];
 
 const AREAS = ["顔全体", "目元のみ", "口元のみ"] as const;
@@ -26,47 +26,23 @@ export default function Home() {
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
   const [mosaicImage, setMosaicImage] = useState<string | null>(null);
   const [mosaicImageSize, setMosaicImageSize] = useState<ImageSize | null>(null);
-  const [mosaicFaceBox, setMosaicFaceBox] = useState<MosaicBox | null>(null);
+  const [mosaicRegions, setMosaicRegions] = useState<FaceRegions | null>(null);
   const [mosaicBox, setMosaicBox] = useState<MosaicBox | null>(null);
   const [mosaicArea, setMosaicArea] = useState<(typeof AREAS)[number]>("顔全体");
   const [mosaicStrength, setMosaicStrength] = useState<(typeof STRENGTHS)[number]>("中");
   const [mosaicStage, setMosaicStage] = useState("");
   const [mosaicLoading, setMosaicLoading] = useState(false);
 
-  const buildRegionBox = useCallback((faceBox: MosaicBox, area: (typeof AREAS)[number]) => {
-    const padX = Math.round(faceBox.width * 0.08);
-    const padY = Math.round(faceBox.height * 0.1);
-    const faceX = Math.max(0, faceBox.x - padX);
-    const faceY = Math.max(0, faceBox.y - padY);
-    const faceW = Math.round(faceBox.width + padX * 2);
-    const faceH = Math.round(faceBox.height + padY * 1.5);
-
-    const clampRegion = (x: number, y: number, width: number, height: number) => ({
-      x: Math.max(0, Math.round(x)),
-      y: Math.max(0, Math.round(y)),
-      width: Math.max(1, Math.round(width)),
-      height: Math.max(1, Math.round(height)),
-    });
-
+  const buildRegionBox = useCallback((regions: FaceRegions, area: (typeof AREAS)[number]) => {
     if (area === "目元のみ") {
-      return clampRegion(
-        faceX + faceW * 0.14,
-        faceY + faceH * 0.2,
-        faceW * 0.72,
-        faceH * 0.2
-      );
+      return regions.eyesBox;
     }
 
     if (area === "口元のみ") {
-      return clampRegion(
-        faceX + faceW * 0.22,
-        faceY + faceH * 0.62,
-        faceW * 0.56,
-        faceH * 0.16
-      );
+      return regions.mouthBox;
     }
 
-    return clampRegion(faceX, faceY, faceW, faceH);
+    return regions.faceBox;
   }, []);
 
   const clampMosaicRegion = useCallback(
@@ -92,7 +68,7 @@ export default function Home() {
     setMosaicSrc(null);
     setMosaicImage(null);
     setMosaicImageSize(null);
-    setMosaicFaceBox(null);
+    setMosaicRegions(null);
     setMosaicBox(null);
     setMosaicStage("");
     setMosaicLoading(false);
@@ -103,7 +79,7 @@ export default function Home() {
       const objectUrl = URL.createObjectURL(file);
       setMosaicSrc(objectUrl);
       setMosaicImage(null);
-      setMosaicFaceBox(null);
+      setMosaicRegions(null);
       setMosaicBox(null);
 
       const bitmap = await createImageBitmap(file);
@@ -111,12 +87,12 @@ export default function Home() {
       bitmap.close();
       setMosaicImageSize(imageSize);
 
-      setMosaicStage("MediaPipe Face Detection で顔を検出中...");
+      setMosaicStage("MediaPipe Face Landmarker で顔を検出中...");
       try {
-        const faceBox = await detectFirstFace(file);
-        setMosaicFaceBox(faceBox);
-        setMosaicBox(faceBox ? buildRegionBox(faceBox, mosaicArea) : null);
-        setMosaicStage(faceBox ? "顔を検出しました。必要なら枠を微調整してください。" : "顔が見つかりませんでした。");
+        const regions = await detectFaceRegions(file);
+        setMosaicRegions(regions);
+        setMosaicBox(regions ? buildRegionBox(regions, mosaicArea) : null);
+        setMosaicStage(regions ? "顔輪郭を検出しました。必要なら枠を微調整してください。" : "顔が見つかりませんでした。");
       } catch {
         setMosaicStage("顔検出に失敗しました。位置は手動で微調整できます。");
       }
@@ -127,15 +103,15 @@ export default function Home() {
   const redetectMosaicFace = useCallback(async () => {
     if (!mosaicSrc) return;
 
-    setMosaicStage("MediaPipe Face Detection で再検出中...");
+    setMosaicStage("MediaPipe Face Landmarker で再検出中...");
     try {
       const response = await fetch(mosaicSrc);
       const blob = await response.blob();
       const file = new File([blob], "mosaic-redetect.jpg", { type: blob.type || "image/jpeg" });
-      const faceBox = await detectFirstFace(file);
-      setMosaicFaceBox(faceBox);
-      setMosaicBox(faceBox ? buildRegionBox(faceBox, mosaicArea) : null);
-      setMosaicStage(faceBox ? "再検出しました。必要なら枠を微調整してください。" : "顔が見つかりませんでした。");
+      const regions = await detectFaceRegions(file);
+      setMosaicRegions(regions);
+      setMosaicBox(regions ? buildRegionBox(regions, mosaicArea) : null);
+      setMosaicStage(regions ? "再検出しました。必要なら枠を微調整してください。" : "顔が見つかりませんでした。");
     } catch {
       setMosaicStage("再検出に失敗しました。");
     }
@@ -288,17 +264,24 @@ export default function Home() {
         </div>
 
         <div className="main-content" style={{ flex: 1, padding: 24, overflowY: "auto" }}>
-          {tab !== "mosaic" ? renderPlaceholder(NAV_ITEMS.find(item => item.id === tab)?.label ?? "LUMIVEIL", "この画面は順次移植中です。まずはモザイク機能を安定させ、MediaPipe Face Detection と微調整UIを優先しています。") : null}
+          {tab !== "mosaic"
+            ? renderPlaceholder(
+                NAV_ITEMS.find(item => item.id === tab)?.label ?? "LUMIVEIL",
+                "この画面は順次移植中です。まずはモザイク機能を安定させ、MediaPipe Face Landmarker と微調整UIを優先しています。"
+              )
+            : null}
 
           {tab === "mosaic" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
               <div style={panelStyle}>
                 <div style={sectionLabelStyle}>プレビュー</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", marginBottom: 10 }}>MediaPipe Face Detection</div>
-                <div style={{ fontSize: 12, color: "#4e4a43", marginBottom: 14 }}>検出した顔枠を表示し、必要なら手動で微調整してからブラーやガウスを適用できます。</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#1a1a1a", marginBottom: 10 }}>MediaPipe Face Landmarker</div>
+                <div style={{ fontSize: 12, color: "#4e4a43", marginBottom: 14 }}>
+                  顔輪郭、目元、口元の領域を検出し、必要なら手動で微調整してからブラーやガウスを適用できます。
+                </div>
 
                 <label style={uploadButtonStyle}>
-                  📁 画像を選択する
+                  画像を選択する
                   <input
                     type="file"
                     accept="image/*"
@@ -332,13 +315,37 @@ export default function Home() {
                     ) : null}
                   </div>
                 ) : (
-                  <div style={{ marginTop: 14, minHeight: 280, borderRadius: 12, border: "1px dashed #9b927f", display: "flex", alignItems: "center", justifyContent: "center", color: "#5f5648", background: "rgba(0,0,0,0.03)", fontSize: 13 }}>
+                  <div
+                    style={{
+                      marginTop: 14,
+                      minHeight: 280,
+                      borderRadius: 12,
+                      border: "1px dashed #9b927f",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#5f5648",
+                      background: "rgba(0,0,0,0.03)",
+                      fontSize: 13,
+                    }}
+                  >
                     画像をアップロードすると、ここに検出枠が表示されます。
                   </div>
                 )}
 
                 {mosaicStage ? (
-                  <div style={{ marginTop: 14, padding: "12px 14px", borderRadius: 10, background: "rgba(201,168,76,0.16)", border: "1px solid rgba(201,168,76,0.35)", color: "#6f5310", fontSize: 12, fontWeight: 700 }}>
+                  <div
+                    style={{
+                      marginTop: 14,
+                      padding: "12px 14px",
+                      borderRadius: 10,
+                      background: "rgba(201,168,76,0.16)",
+                      border: "1px solid rgba(201,168,76,0.35)",
+                      color: "#6f5310",
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
                     {mosaicStage}
                   </div>
                 ) : null}
@@ -354,7 +361,7 @@ export default function Home() {
                         onClick={() => {
                           setMosaicArea(area);
                           setMosaicImage(null);
-                          setMosaicBox(mosaicFaceBox ? buildRegionBox(mosaicFaceBox, area) : null);
+                          setMosaicBox(mosaicRegions ? buildRegionBox(mosaicRegions, area) : null);
                         }}
                         style={choiceButtonStyle(mosaicArea === area)}
                       >
@@ -378,31 +385,51 @@ export default function Home() {
                 <div style={{ padding: 12, borderRadius: 10, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                     <div style={sectionLabelStyle}>検出枠の調整</div>
-                    <button onClick={() => void redetectMosaicFace()} style={smallButtonStyle}>顔を再検出</button>
+                    <button onClick={() => void redetectMosaicFace()} style={smallButtonStyle}>
+                      顔を再検出
+                    </button>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, maxWidth: 220 }}>
                     <div />
-                    <button onClick={() => nudgeMosaicBox(0, -12)} style={smallButtonStyle}>上</button>
+                    <button onClick={() => nudgeMosaicBox(0, -12)} style={smallButtonStyle}>
+                      上
+                    </button>
                     <div />
-                    <button onClick={() => nudgeMosaicBox(-12, 0)} style={smallButtonStyle}>左</button>
-                    <button onClick={() => nudgeMosaicBox(0, 12)} style={smallButtonStyle}>下</button>
-                    <button onClick={() => nudgeMosaicBox(12, 0)} style={smallButtonStyle}>右</button>
+                    <button onClick={() => nudgeMosaicBox(-12, 0)} style={smallButtonStyle}>
+                      左
+                    </button>
+                    <button onClick={() => nudgeMosaicBox(0, 12)} style={smallButtonStyle}>
+                      下
+                    </button>
+                    <button onClick={() => nudgeMosaicBox(12, 0)} style={smallButtonStyle}>
+                      右
+                    </button>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={() => resizeMosaicBox(-18)} style={smallButtonStyle}>縮小</button>
-                    <button onClick={() => resizeMosaicBox(18)} style={smallButtonStyle}>拡大</button>
+                    <button onClick={() => resizeMosaicBox(-18)} style={smallButtonStyle}>
+                      縮小
+                    </button>
+                    <button onClick={() => resizeMosaicBox(18)} style={smallButtonStyle}>
+                      拡大
+                    </button>
                   </div>
                 </div>
 
                 <div>
                   <div style={sectionLabelStyle}>エフェクト</div>
                   <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => void runMosaic("blur")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>ブラー</button>
-                    <button onClick={() => void runMosaic("gaussian")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>ガウス</button>
+                    <button onClick={() => void runMosaic("blur")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>
+                      ブラー
+                    </button>
+                    <button onClick={() => void runMosaic("gaussian")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>
+                      ガウス
+                    </button>
                   </div>
                 </div>
 
-                <button onClick={resetMosaic} style={{ ...smallButtonStyle, width: "100%" }}>リセット</button>
+                <button onClick={resetMosaic} style={{ ...smallButtonStyle, width: "100%" }}>
+                  リセット
+                </button>
               </div>
             </div>
           ) : null}
@@ -410,16 +437,30 @@ export default function Home() {
       </div>
 
       {mosaicImage && mosaicSrc ? (
-        <div onClick={() => setMosaicImage(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div onClick={event => event.stopPropagation()} style={{ width: "min(980px, 92vw)", background: "#102733", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}>
+        <div
+          onClick={() => setMosaicImage(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+        >
+          <div
+            onClick={event => event.stopPropagation()}
+            style={{ width: "min(980px, 92vw)", background: "#102733", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, padding: 18 }}
+          >
             <div style={{ fontSize: 14, fontWeight: 700, color: "#f0ece4", marginBottom: 14 }}>比較表示</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
               <PreviewCard label="加工前" src={mosaicSrc} />
               <PreviewCard label="加工後" src={mosaicImage} />
             </div>
             <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 16 }}>
-              <a href={mosaicImage} download="mosaic.png" style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 120 }}>保存</a>
-              <button onClick={() => setMosaicImage(null)} style={{ ...smallButtonStyle, minWidth: 120 }}>閉じる</button>
+              <a
+                href={mosaicImage}
+                download="mosaic.png"
+                style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 120 }}
+              >
+                保存
+              </a>
+              <button onClick={() => setMosaicImage(null)} style={{ ...smallButtonStyle, minWidth: 120 }}>
+                閉じる
+              </button>
             </div>
           </div>
         </div>
@@ -457,7 +498,18 @@ function PreviewCard({ label, src }: { label: string; src: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color: "#c9a84c" }}>{label}</div>
-      <div style={{ height: 320, borderRadius: 12, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          height: 320,
+          borderRadius: 12,
+          overflow: "hidden",
+          background: "#000",
+          border: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <img src={src} alt={label} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
       </div>
     </div>
