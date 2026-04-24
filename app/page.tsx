@@ -177,6 +177,9 @@ export default function Home() {
           最強: "4",
         };
 
+        const scope =
+          mosaicArea === "顔全体" ? "face" : mosaicArea === "目元のみ" ? "eyes_only" : "bust_up";
+
         const formData = new FormData();
         formData.append("file", file);
         formData.append("mode", modeMap[mode]);
@@ -185,10 +188,7 @@ export default function Home() {
         formData.append("y", String(mosaicBox.y));
         formData.append("width", String(mosaicBox.width));
         formData.append("height", String(mosaicBox.height));
-        formData.append(
-          "scope",
-          mosaicArea === "顔全体" ? "face" : mosaicArea === "目元のみ" ? "eyes_only" : "bust_up"
-        );
+        formData.append("scope", scope);
         formData.append("strength", strengthMap[mosaicStrength]);
 
         const apiRes = await fetch("/api/mosaic", { method: "POST", body: formData });
@@ -206,7 +206,7 @@ export default function Home() {
         setMosaicLoading(false);
       }
     },
-    [mosaicBox, mosaicSrc, mosaicStrength]
+    [mosaicArea, mosaicBox, mosaicSrc, mosaicStrength]
   );
 
   const renderPlaceholder = (title: string, body: string) => (
