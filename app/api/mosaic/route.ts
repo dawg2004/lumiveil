@@ -14,6 +14,7 @@ type Region = {
   ellipseRx: number;
   ellipseRy: number;
   blurMask: number;
+  scope: Scope;
 };
 
 function clampRegion(
@@ -56,9 +57,10 @@ function regionFromDirectBox(
 
   return {
     ...base,
-    ellipseRx: scope === "eyes_only" ? 0.48 : scope === "bust_up" ? 0.46 : 0.44,
-    ellipseRy: scope === "eyes_only" ? 0.38 : 0.48,
-    blurMask: scope === "eyes_only" ? 10 : scope === "bust_up" ? 18 : 14,
+    ellipseRx: scope === "eyes_only" ? 0.46 : scope === "bust_up" ? 0.47 : 0.4,
+    ellipseRy: scope === "eyes_only" ? 0.32 : scope === "bust_up" ? 0.5 : 0.5,
+    blurMask: scope === "eyes_only" ? 16 : scope === "bust_up" ? 24 : 22,
+    scope,
   };
 }
 
@@ -74,47 +76,50 @@ function regionFromFaceBox(
   if (scope === "eyes_only") {
     return {
       ...clampRegion(
-        x + width * 0.1,
-        y + height * 0.18,
-        width * 0.8,
-        height * 0.3,
+        x + width * 0.12,
+        y + height * 0.2,
+        width * 0.76,
+        height * 0.24,
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.48,
-      ellipseRy: 0.38,
-      blurMask: 10,
+      ellipseRx: 0.46,
+      ellipseRy: 0.32,
+      blurMask: 16,
+      scope,
     };
   }
 
   if (scope === "bust_up") {
     return {
       ...clampRegion(
-        x - width * 0.45,
-        y - height * 0.2,
-        width * 1.9,
-        height * 2.3,
+        x - width * 0.42,
+        y - height * 0.18,
+        width * 1.84,
+        height * 2.2,
         imageWidth,
         imageHeight
       ),
-      ellipseRx: 0.46,
-      ellipseRy: 0.48,
-      blurMask: 18,
+      ellipseRx: 0.47,
+      ellipseRy: 0.5,
+      blurMask: 24,
+      scope,
     };
   }
 
   return {
     ...clampRegion(
-      x - width * 0.18,
-      y - height * 0.1,
-      width * 1.36,
-      height * 1.28,
+      x - width * 0.16,
+      y - height * 0.08,
+      width * 1.32,
+      height * 1.3,
       imageWidth,
       imageHeight
     ),
-    ellipseRx: 0.44,
-    ellipseRy: 0.48,
-    blurMask: 14,
+    ellipseRx: 0.4,
+    ellipseRy: 0.5,
+    blurMask: 22,
+    scope,
   };
 }
 
@@ -142,6 +147,38 @@ function getStrength(rawStrength: string) {
     : 6;
 }
 
+function buildMaskShape(region: Region) {
+  if (region.scope === "eyes_only") {
+    const rx = region.width * region.ellipseRx;
+    const ry = Math.max(region.height * region.ellipseRy, region.height * 0.34);
+    const x = region.width / 2 - rx;
+    const y = region.height / 2 - ry;
+    const width = rx * 2;
+    const height = ry * 2;
+    const rounded = Math.min(height * 0.95, width * 0.28);
+
+    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="${rounded}" ry="${rounded}" fill="white" filter="url(#soft)" />`;
+  }
+
+  if (region.scope === "bust_up") {
+    return `<ellipse cx="${region.width / 2}" cy="${region.height / 2}" rx="${region.width * region.ellipseRx}" ry="${region.height * region.ellipseRy}" fill="white" filter="url(#soft)" />`;
+  }
+
+  const w = region.width;
+  const h = region.height;
+  const path = [
+    `M ${w * 0.24} ${h * 0.18}`,
+    `C ${w * 0.16} ${h * 0.28}, ${w * 0.12} ${h * 0.46}, ${w * 0.16} ${h * 0.64}`,
+    `C ${w * 0.2} ${h * 0.82}, ${w * 0.34} ${h * 0.95}, ${w * 0.5} ${h * 0.98}`,
+    `C ${w * 0.66} ${h * 0.95}, ${w * 0.8} ${h * 0.82}, ${w * 0.84} ${h * 0.64}`,
+    `C ${w * 0.88} ${h * 0.46}, ${w * 0.84} ${h * 0.28}, ${w * 0.76} ${h * 0.18}`,
+    `C ${w * 0.68} ${h * 0.08}, ${w * 0.32} ${h * 0.08}, ${w * 0.24} ${h * 0.18}`,
+    "Z",
+  ].join(" ");
+
+  return `<path d="${path}" fill="white" filter="url(#soft)" />`;
+}
+
 function buildMaskSvg(region: Region) {
   return Buffer.from(`
     <svg
@@ -156,14 +193,7 @@ function buildMaskSvg(region: Region) {
           <feGaussianBlur stdDeviation="${region.blurMask}" />
         </filter>
       </defs>
-      <ellipse
-        cx="${region.width / 2}"
-        cy="${region.height / 2}"
-        rx="${region.width * region.ellipseRx}"
-        ry="${region.height * region.ellipseRy}"
-        fill="white"
-        filter="url(#soft)"
-      />
+      ${buildMaskShape(region)}
     </svg>
   `);
 }
