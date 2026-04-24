@@ -4,6 +4,7 @@ import sharp from "sharp";
 export const runtime = "nodejs";
 
 type Scope = "face" | "eyes_only" | "bust_up";
+type Mode = "ブラー" | "ガウス" | "モザイク";
 
 type Region = {
   left: number;
@@ -25,8 +26,14 @@ function clampRegion(
 ) {
   const safeLeft = Math.max(0, Math.min(Math.floor(left), imageWidth - 1));
   const safeTop = Math.max(0, Math.min(Math.floor(top), imageHeight - 1));
-  const safeWidth = Math.max(1, Math.min(Math.floor(width), imageWidth - safeLeft));
-  const safeHeight = Math.max(1, Math.min(Math.floor(height), imageHeight - safeTop));
+  const safeWidth = Math.max(
+    1,
+    Math.min(Math.floor(width), imageWidth - safeLeft)
+  );
+  const safeHeight = Math.max(
+    1,
+    Math.min(Math.floor(height), imageHeight - safeTop)
+  );
 
   return {
     left: safeLeft,
@@ -111,11 +118,128 @@ function regionFromFaceBox(
   };
 }
 
+function getStrength(rawStrength: string) {
+  const strengthMap: Record<string, number> = {
+    "1": 2,
+    "2": 4,
+    "3": 6,
+    "4": 8,
+    "5": 10,
+    "6": 12,
+    "7": 14,
+    "8": 16,
+    "9": 18,
+    "10": 20,
+    弱: 3,
+    中: 6,
+    強: 10,
+    最強: 16,
+  };
+
+  const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
+  return Number.isFinite(parsedStrength)
+    ? Math.max(1, Math.min(20, parsedStrength))
+    : 6;
+}
+
+function buildMaskSvg(region: Region) {
+  return Buffer.from(`
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="${region.width}"
+      height="${region.height}"
+      viewBox="0 0 ${region.width} ${region.height}"
+    >
+      <rect width="100%" height="100%" fill="black" fill-opacity="0" />
+      <defs>
+        <filter id="soft">
+          <feGaussianBlur stdDeviation="${region.blurMask}" />
+        </filter>
+      </defs>
+      <ellipse
+        cx="${region.width / 2}"
+        cy="${region.height / 2}"
+        rx="${region.width * region.ellipseRx}"
+        ry="${region.height * region.ellipseRy}"
+        fill="white"
+        filter="url(#soft)"
+      />
+    </svg>
+  `);
+}
+
+async function applySoftMask(input: Buffer, region: Region) {
+  const alphaMask = await sharp(buildMaskSvg(region))
+    .resize(region.width, region.height)
+    .ensureAlpha()
+    .extractChannel("alpha")
+    .toBuffer();
+
+  return sharp(input).ensureAlpha().joinChannel(alphaMask).png().toBuffer();
+}
+
+async function processBlur(bytes: Buffer, region: Region, strength: number) {
+  const sigma = Math.max(8, strength * 1.8);
+  const blurred = await sharp(bytes)
+    .extract({
+      left: region.left,
+      top: region.top,
+      width: region.width,
+      height: region.height,
+    })
+    .blur(sigma)
+    .png()
+    .toBuffer();
+
+  return applySoftMask(blurred, region);
+}
+
+async function processGaussian(bytes: Buffer, region: Region, strength: number) {
+  const block = Math.max(10, Math.floor(8 + strength * 1.4));
+  const downW = Math.max(2, Math.floor(region.width / block));
+  const downH = Math.max(2, Math.floor(region.height / block));
+
+  const pixelated = await sharp(bytes)
+    .extract({
+      left: region.left,
+      top: region.top,
+      width: region.width,
+      height: region.height,
+    })
+    .resize(downW, downH, { kernel: "nearest" })
+    .resize(region.width, region.height, { kernel: "nearest" })
+    .blur(Math.max(2, strength * 0.35))
+    .png()
+    .toBuffer();
+
+  return applySoftMask(pixelated, region);
+}
+
+async function processMosaic(bytes: Buffer, region: Region, strength: number) {
+  const block = Math.max(12, Math.floor(10 + strength * 1.6));
+  const downW = Math.max(2, Math.floor(region.width / block));
+  const downH = Math.max(2, Math.floor(region.height / block));
+
+  const pixelated = await sharp(bytes)
+    .extract({
+      left: region.left,
+      top: region.top,
+      width: region.width,
+      height: region.height,
+    })
+    .resize(downW, downH, { kernel: "nearest" })
+    .resize(region.width, region.height, { kernel: "nearest" })
+    .png()
+    .toBuffer();
+
+  return applySoftMask(pixelated, region);
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-    const mode = String(formData.get("mode") ?? "モザイク");
+    const mode = String(formData.get("mode") ?? "モザイク") as Mode;
     const boxMode = String(formData.get("boxMode") ?? "face");
     const scope = String(formData.get("scope") ?? "face") as Scope;
 
@@ -123,28 +247,7 @@ export async function POST(req: NextRequest) {
     const y = Number(formData.get("y") ?? 0);
     const width = Number(formData.get("width") ?? 0);
     const height = Number(formData.get("height") ?? 0);
-
-    const rawStrength = String(formData.get("strength") ?? "2");
-    const strengthMap: Record<string, number> = {
-      "1": 3,
-      "2": 8,
-      "3": 12,
-      "4": 16,
-      "5": 5,
-      "6": 6,
-      "7": 7,
-      "8": 8,
-      "9": 9,
-      "10": 10,
-      "弱": 3,
-      "中": 8,
-      "強": 12,
-      "最強": 16,
-    };
-    const parsedStrength = strengthMap[rawStrength] ?? Number(rawStrength);
-    const strength = Number.isFinite(parsedStrength)
-      ? Math.max(1, Math.min(16, parsedStrength))
-      : 8;
+    const strength = getStrength(String(formData.get("strength") ?? "2"));
 
     if (!file) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -167,103 +270,22 @@ export async function POST(req: NextRequest) {
         ? boxMode === "region"
           ? regionFromDirectBox(x, y, width, height, imgW, imgH, scope)
           : regionFromFaceBox(x, y, width, height, imgW, imgH, scope)
-        : regionFromDirectBox(imgW * 0.2, imgH * 0.12, imgW * 0.6, imgH * 0.62, imgW, imgH, scope);
+        : regionFromDirectBox(
+            imgW * 0.2,
+            imgH * 0.12,
+            imgW * 0.6,
+            imgH * 0.62,
+            imgW,
+            imgH,
+            scope
+          );
 
-    const makeMask = () => Buffer.from(`
-      <svg width="${region.width}" height="${region.height}">
-        <defs>
-          <filter id="blur"><feGaussianBlur stdDeviation="${region.blurMask}"/></filter>
-        </defs>
-        <ellipse
-          cx="${region.width / 2}"
-          cy="${region.height / 2}"
-          rx="${region.width * region.ellipseRx}"
-          ry="${region.height * region.ellipseRy}"
-          fill="white"
-          filter="url(#blur)"
-        />
-      </svg>
-    `);
-
-    const whiteOverlayOpacity = Math.min(0.94, 0.5 + strength * 0.028);
-    const whiteOverlay = await sharp({
-      create: {
-        width: region.width,
-        height: region.height,
-        channels: 4,
-        background: {
-          r: 255,
-          g: 255,
-          b: 255,
-          alpha: whiteOverlayOpacity,
-        },
-      },
-    })
-      .png()
-      .toBuffer();
-
-    const applyWhiteFinish = async (input: Buffer) =>
-      sharp(input)
-        .modulate({
-          brightness: Math.min(1.22, 1.04 + strength * 0.01),
-          saturation: 0.08,
-        })
-        .composite([{ input: whiteOverlay, blend: "over" }])
-        .png()
-        .toBuffer();
-
-    let regionBuffer: Buffer;
-
-    if (mode === "ブラー") {
-      const sigma = Math.max(14, strength * 10);
-      regionBuffer = await sharp(bytes)
-        .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
-        .blur(sigma)
-        .png()
-        .toBuffer();
-
-      regionBuffer = await sharp(regionBuffer)
-        .composite([{ input: makeMask(), blend: "dest-in" }])
-        .png()
-        .toBuffer();
-      regionBuffer = await applyWhiteFinish(regionBuffer);
-    } else if (mode === "ガウス") {
-      const block = Math.max(24, Math.floor(20 * strength));
-      const downW = Math.max(2, Math.floor(region.width / block));
-      const downH = Math.max(2, Math.floor(region.height / block));
-
-      regionBuffer = await sharp(bytes)
-        .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
-        .resize(downW, downH, { kernel: "nearest" })
-        .resize(region.width, region.height, { kernel: "nearest" })
-        .blur(Math.max(4, strength * 2))
-        .png()
-        .toBuffer();
-
-      regionBuffer = await sharp(regionBuffer)
-        .composite([{ input: makeMask(), blend: "dest-in" }])
-        .png()
-        .toBuffer();
-      regionBuffer = await applyWhiteFinish(regionBuffer);
-    } else {
-      const block = Math.max(26, Math.floor(26 * strength));
-      const downW = Math.max(2, Math.floor(region.width / block));
-      const downH = Math.max(2, Math.floor(region.height / block));
-
-      regionBuffer = await sharp(bytes)
-        .extract({ left: region.left, top: region.top, width: region.width, height: region.height })
-        .resize(downW, downH, { kernel: "nearest" })
-        .resize(region.width, region.height, { kernel: "nearest" })
-        .blur(Math.max(2, strength * 0.8))
-        .png()
-        .toBuffer();
-
-      regionBuffer = await sharp(regionBuffer)
-        .composite([{ input: makeMask(), blend: "dest-in" }])
-        .png()
-        .toBuffer();
-      regionBuffer = await applyWhiteFinish(regionBuffer);
-    }
+    const regionBuffer =
+      mode === "ブラー"
+        ? await processBlur(bytes, region, strength)
+        : mode === "ガウス"
+          ? await processGaussian(bytes, region, strength)
+          : await processMosaic(bytes, region, strength);
 
     const output = await sharp(bytes)
       .composite([{ input: regionBuffer, left: region.left, top: region.top }])
