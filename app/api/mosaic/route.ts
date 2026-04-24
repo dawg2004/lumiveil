@@ -57,9 +57,9 @@ function regionFromDirectBox(
 
   return {
     ...base,
-    ellipseRx: scope === "eyes_only" ? 0.46 : scope === "bust_up" ? 0.47 : 0.4,
-    ellipseRy: scope === "eyes_only" ? 0.32 : scope === "bust_up" ? 0.5 : 0.5,
-    blurMask: scope === "eyes_only" ? 16 : scope === "bust_up" ? 24 : 22,
+    ellipseRx: scope === "eyes_only" ? 0.46 : scope === "bust_up" ? 0.47 : 0.39,
+    ellipseRy: scope === "eyes_only" ? 0.32 : scope === "bust_up" ? 0.5 : 0.53,
+    blurMask: scope === "eyes_only" ? 18 : scope === "bust_up" ? 24 : 26,
     scope,
   };
 }
@@ -85,7 +85,7 @@ function regionFromFaceBox(
       ),
       ellipseRx: 0.46,
       ellipseRy: 0.32,
-      blurMask: 16,
+      blurMask: 18,
       scope,
     };
   }
@@ -109,16 +109,16 @@ function regionFromFaceBox(
 
   return {
     ...clampRegion(
-      x - width * 0.16,
-      y - height * 0.08,
-      width * 1.32,
-      height * 1.3,
+      x - width * 0.15,
+      y - height * 0.18,
+      width * 1.3,
+      height * 1.45,
       imageWidth,
       imageHeight
     ),
-    ellipseRx: 0.4,
-    ellipseRy: 0.5,
-    blurMask: 22,
+    ellipseRx: 0.39,
+    ellipseRy: 0.53,
+    blurMask: 26,
     scope,
   };
 }
@@ -167,12 +167,13 @@ function buildMaskShape(region: Region) {
   const w = region.width;
   const h = region.height;
   const path = [
-    `M ${w * 0.24} ${h * 0.18}`,
-    `C ${w * 0.16} ${h * 0.28}, ${w * 0.12} ${h * 0.46}, ${w * 0.16} ${h * 0.64}`,
-    `C ${w * 0.2} ${h * 0.82}, ${w * 0.34} ${h * 0.95}, ${w * 0.5} ${h * 0.98}`,
-    `C ${w * 0.66} ${h * 0.95}, ${w * 0.8} ${h * 0.82}, ${w * 0.84} ${h * 0.64}`,
-    `C ${w * 0.88} ${h * 0.46}, ${w * 0.84} ${h * 0.28}, ${w * 0.76} ${h * 0.18}`,
-    `C ${w * 0.68} ${h * 0.08}, ${w * 0.32} ${h * 0.08}, ${w * 0.24} ${h * 0.18}`,
+    `M ${w * 0.28} ${h * 0.16}`,
+    `C ${w * 0.2} ${h * 0.2}, ${w * 0.15} ${h * 0.34}, ${w * 0.15} ${h * 0.5}`,
+    `C ${w * 0.15} ${h * 0.72}, ${w * 0.24} ${h * 0.88}, ${w * 0.37} ${h * 0.96}`,
+    `C ${w * 0.45} ${h * 1.0}, ${w * 0.55} ${h * 1.0}, ${w * 0.63} ${h * 0.96}`,
+    `C ${w * 0.76} ${h * 0.88}, ${w * 0.85} ${h * 0.72}, ${w * 0.85} ${h * 0.5}`,
+    `C ${w * 0.85} ${h * 0.34}, ${w * 0.8} ${h * 0.2}, ${w * 0.72} ${h * 0.16}`,
+    `C ${w * 0.63} ${h * 0.06}, ${w * 0.37} ${h * 0.06}, ${w * 0.28} ${h * 0.16}`,
     "Z",
   ].join(" ");
 
