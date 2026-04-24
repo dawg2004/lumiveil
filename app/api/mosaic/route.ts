@@ -192,12 +192,15 @@ async function buildSoftMask(
   const capsuleWidth = width * 0.76;
   const capsuleHeight = height * 0.64;
   const capsuleRadius = Math.min(capsuleWidth, capsuleHeight) * 0.42;
-  const shapeMarkup =
-    maskShape === "face"
-      ? `<path d="${facePath}" fill="white" filter="url(#soft)" />`
-      : maskShape === "capsule"
-        ? `<rect x="${capsuleX}" y="${capsuleY}" width="${capsuleWidth}" height="${capsuleHeight}" rx="${capsuleRadius}" ry="${capsuleRadius}" fill="white" filter="url(#soft)" />`
-        : `<ellipse cx="${width / 2}" cy="${height / 2}" rx="${width * ellipseRx}" ry="${height * ellipseRy}" fill="white" filter="url(#soft)" />`;
+
+  let shapeMarkup = `<ellipse cx="${width / 2}" cy="${height / 2}" rx="${width * ellipseRx}" ry="${height * ellipseRy}" fill="white" filter="url(#soft)" />`;
+
+  if (maskShape === "face") {
+    shapeMarkup = `<path d="${facePath}" fill="white" filter="url(#soft)" />`;
+  } else if (maskShape === "capsule") {
+    shapeMarkup = `<rect x="${capsuleX}" y="${capsuleY}" width="${capsuleWidth}" height="${capsuleHeight}" rx="${capsuleRadius}" ry="${capsuleRadius}" fill="white" filter="url(#soft)" />`;
+  }
+
   const maskSvg = Buffer.from(`
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -302,18 +305,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid image" }, { status: 400 });
     }
 
-    const region =
-      Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height)
-        ? boxMode === "region"
-          ? {
-              ...clampRegion(x, y, width, height, imageWidth, imageHeight),
-              ellipseRx: scope === "face" ? 0.32 : 0.3,
-              ellipseRy: scope === "face" ? 0.42 : 0.3,
-              blurMask: scope === "face" ? 32 : 26,
-              maskShape: scope === "face" ? "face" : "capsule",
-            }
-          : regionForFaceBox(scope, imageWidth, imageHeight, x, y, width, height)
-        : regionForScope(scope, imageWidth, imageHeight);
+    let region: Region;
+
+    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height)) {
+      if (boxMode === "region") {
+        region = {
+          ...clampRegion(x, y, width, height, imageWidth, imageHeight),
+          ellipseRx: scope === "face" ? 0.32 : 0.3,
+          ellipseRy: scope === "face" ? 0.42 : 0.3,
+          blurMask: scope === "face" ? 32 : 26,
+          maskShape: scope === "face" ? "face" : "capsule",
+        };
+      } else {
+        region = regionForFaceBox(scope, imageWidth, imageHeight, x, y, width, height);
+      }
+    } else {
+      region = regionForScope(scope, imageWidth, imageHeight);
+    }
 
     const extracted = await sharp(bytes)
       .extract({
