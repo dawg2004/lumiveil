@@ -20,6 +20,8 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
 
 const AREAS = ["顔全体", "目元のみ", "口元のみ"] as const;
 const STRENGTHS = ["弱", "中", "強", "最強"] as const;
+const NUDGE_STEP = 4;
+const RESIZE_STEP = 8;
 
 export default function Home() {
   const [tab, setTab] = useState<TabId>("mosaic");
@@ -384,32 +386,35 @@ export default function Home() {
 
                 <div style={{ padding: 12, borderRadius: 10, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                    <div style={sectionLabelStyle}>検出枠の調整</div>
+                    <div>
+                      <div style={sectionLabelStyle}>検出枠の調整</div>
+                      <div style={{ fontSize: 11, color: "#6a6258" }}>移動 4px / サイズ 8px ずつ</div>
+                    </div>
                     <button onClick={() => void redetectMosaicFace()} style={smallButtonStyle}>
                       顔を再検出
                     </button>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, maxWidth: 220 }}>
                     <div />
-                    <button onClick={() => nudgeMosaicBox(0, -12)} style={smallButtonStyle}>
+                    <button onClick={() => nudgeMosaicBox(0, -NUDGE_STEP)} style={smallButtonStyle}>
                       上
                     </button>
                     <div />
-                    <button onClick={() => nudgeMosaicBox(-12, 0)} style={smallButtonStyle}>
+                    <button onClick={() => nudgeMosaicBox(-NUDGE_STEP, 0)} style={smallButtonStyle}>
                       左
                     </button>
-                    <button onClick={() => nudgeMosaicBox(0, 12)} style={smallButtonStyle}>
+                    <button onClick={() => nudgeMosaicBox(0, NUDGE_STEP)} style={smallButtonStyle}>
                       下
                     </button>
-                    <button onClick={() => nudgeMosaicBox(12, 0)} style={smallButtonStyle}>
+                    <button onClick={() => nudgeMosaicBox(NUDGE_STEP, 0)} style={smallButtonStyle}>
                       右
                     </button>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={() => resizeMosaicBox(-18)} style={smallButtonStyle}>
+                    <button onClick={() => resizeMosaicBox(-RESIZE_STEP)} style={smallButtonStyle}>
                       縮小
                     </button>
-                    <button onClick={() => resizeMosaicBox(18)} style={smallButtonStyle}>
+                    <button onClick={() => resizeMosaicBox(RESIZE_STEP)} style={smallButtonStyle}>
                       拡大
                     </button>
                   </div>
