@@ -4,7 +4,7 @@ import sharp from "sharp";
 export const runtime = "nodejs";
 
 type Scope = "face" | "eyes_only" | "bust_up";
-type Style = "blur" | "lens" | "mosaic";
+type Style = "blur" | "lens" | "mosaic" | "simple_mosaic";
 type MaskShape = "face" | "capsule" | "oval";
 
 type Region = {
@@ -37,6 +37,26 @@ function clampRegion(
     width: safeWidth,
     height: safeHeight,
   };
+}
+
+function expandRegion(
+  region: Pick<Region, "left" | "top" | "width" | "height">,
+  imageWidth: number,
+  imageHeight: number,
+  ratioX: number,
+  ratioY: number
+) {
+  const padX = region.width * ratioX;
+  const padY = region.height * ratioY;
+
+  return clampRegion(
+    region.left - padX,
+    region.top - padY,
+    region.width + padX * 2,
+    region.height + padY * 2,
+    imageWidth,
+    imageHeight
+  );
 }
 
 function regionForScope(scope: Scope, width: number, height: number): Region {
@@ -169,6 +189,10 @@ function parseStyle(formData: FormData): Style {
     return "lens";
   }
 
+  if (raw === "simple" || raw === "simple_mosaic" || raw === "自動モザイク") {
+    return "simple_mosaic";
+  }
+
   return "mosaic";
 }
 
@@ -288,6 +312,21 @@ async function applyPixelate(
   return applySoftMask(pixelated, width, height, ellipseRx, ellipseRy, blurMask, maskShape);
 }
 
+async function applySimplePixelate(source: Buffer, strength: number, width: number, height: number) {
+  const shortSide = Math.min(width, height);
+  const ratioByStrength = [0.03, 0.04, 0.05, 0.06, 0.075];
+  const ratio = ratioByStrength[Math.max(0, Math.min(4, strength - 1))];
+  const blockSize = Math.max(1, Math.round(shortSide * ratio));
+  const downW = Math.max(1, Math.floor(width / blockSize));
+  const downH = Math.max(1, Math.floor(height / blockSize));
+
+  return sharp(source)
+    .resize(downW, downH, { kernel: "nearest" })
+    .resize(width, height, { kernel: "nearest" })
+    .png()
+    .toBuffer();
+}
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -332,6 +371,21 @@ export async function POST(req: NextRequest) {
       region = regionForScope(scope, imageWidth, imageHeight);
     }
 
+    if (style === "simple_mosaic") {
+      const expanded = expandRegion(
+        region,
+        imageWidth,
+        imageHeight,
+        scope === "face" ? 0.18 : 0.12,
+        scope === "face" ? 0.18 : 0.14
+      );
+
+      region = {
+        ...region,
+        ...expanded,
+      };
+    }
+
     const extracted = await sharp(bytes)
       .extract({
         left: region.left,
@@ -343,7 +397,9 @@ export async function POST(req: NextRequest) {
       .toBuffer();
 
     const regionOutput =
-      style === "mosaic"
+      style === "simple_mosaic"
+        ? await applySimplePixelate(extracted, strength, region.width, region.height)
+        : style === "mosaic"
         ? await applyPixelate(
             extracted,
             strength,
