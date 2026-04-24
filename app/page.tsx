@@ -6,7 +6,7 @@ import { type CSSProperties, useCallback, useState } from "react";
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "plan";
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
-type MosaicMode = "blur" | "gaussian";
+type MosaicMode = "blur" | "gaussian" | "simple";
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "generate", label: "画像生成", icon: "*" },
@@ -158,7 +158,13 @@ export default function Home() {
       if (!mosaicSrc || !mosaicBox) return;
 
       setMosaicLoading(true);
-      setMosaicStage(mode === "blur" ? "ブラー加工中..." : "ガウス加工中...");
+      setMosaicStage(
+        mode === "blur"
+          ? "ブラー加工中..."
+          : mode === "gaussian"
+            ? "ガウス加工中..."
+            : "自動モザイク加工中..."
+      );
 
       try {
         const response = await fetch(mosaicSrc);
@@ -168,6 +174,7 @@ export default function Home() {
         const modeMap: Record<MosaicMode, string> = {
           blur: "ブラー",
           gaussian: "ガウス",
+          simple: "自動モザイク",
         };
 
         const strengthMap: Record<(typeof STRENGTHS)[number], string> = {
@@ -426,12 +433,16 @@ export default function Home() {
 
                 <div>
                   <div style={sectionLabelStyle}>エフェクト</div>
+                  <div style={{ fontSize: 11, color: "#6a6258", marginBottom: 8 }}>自動モザイクは安定重視で四角く広めに隠します。</div>
                   <div style={{ display: "flex", gap: 10 }}>
                     <button onClick={() => void runMosaic("blur")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>
                       ブラー
                     </button>
                     <button onClick={() => void runMosaic("gaussian")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>
                       ガウス
+                    </button>
+                    <button onClick={() => void runMosaic("simple")} style={actionButtonStyle} disabled={!mosaicSrc || !mosaicBox || mosaicLoading}>
+                      自動モザイク
                     </button>
                   </div>
                 </div>
