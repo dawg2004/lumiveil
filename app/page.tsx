@@ -1,15 +1,12 @@
 "use client";
 
 import { detectFirstFace } from "@/lib/faceDetector";
-import { useCallback, useState } from "react";
+import { type CSSProperties, useCallback, useState } from "react";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "plan";
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
-
 type MosaicMode = "blur" | "gaussian";
-
-authority;
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "generate", label: "画像生成", icon: "✦" },
@@ -467,14 +464,14 @@ function PreviewCard({ label, src }: { label: string; src: string }) {
   );
 }
 
-const panelStyle: React.CSSProperties = {
+const panelStyle: CSSProperties = {
   background: "#c8c2b4",
   borderRadius: 12,
   padding: 18,
   border: "1px solid #a89e8e",
 };
 
-const sectionLabelStyle: React.CSSProperties = {
+const sectionLabelStyle: CSSProperties = {
   fontSize: 11,
   color: "#444",
   marginBottom: 8,
@@ -482,7 +479,7 @@ const sectionLabelStyle: React.CSSProperties = {
   fontWeight: 700,
 };
 
-const uploadButtonStyle: React.CSSProperties = {
+const uploadButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -498,13 +495,13 @@ const uploadButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const buttonRowStyle: React.CSSProperties = {
+const buttonRowStyle: CSSProperties = {
   display: "flex",
   gap: 8,
   flexWrap: "wrap",
 };
 
-const choiceButtonStyle = (active: boolean): React.CSSProperties => ({
+const choiceButtonStyle = (active: boolean): CSSProperties => ({
   flex: 1,
   minWidth: 88,
   padding: "10px 0",
@@ -517,7 +514,7 @@ const choiceButtonStyle = (active: boolean): React.CSSProperties => ({
   cursor: "pointer",
 });
 
-const actionButtonStyle: React.CSSProperties = {
+const actionButtonStyle: CSSProperties = {
   flex: 1,
   padding: "12px 0",
   borderRadius: 8,
@@ -529,7 +526,7 @@ const actionButtonStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const smallButtonStyle: React.CSSProperties = {
+const smallButtonStyle: CSSProperties = {
   padding: "10px 12px",
   borderRadius: 8,
   background: "#b0a898",
