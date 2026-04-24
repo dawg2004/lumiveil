@@ -46,7 +46,7 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
       height: Math.max(1, Math.floor(height * 0.22)),
       ellipseRx: 0.46,
       ellipseRy: 0.4,
-      blurMask: 12,
+      blurMask: 18,
     };
   }
 
@@ -58,7 +58,7 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
       height: Math.max(1, Math.floor(height * 0.68)),
       ellipseRx: 0.48,
       ellipseRy: 0.48,
-      blurMask: 16,
+      blurMask: 22,
     };
   }
 
@@ -69,7 +69,7 @@ function regionForScope(scope: Scope, width: number, height: number): Region {
     height: Math.max(1, Math.floor(height * 0.62)),
     ellipseRx: 0.42,
     ellipseRy: 0.46,
-    blurMask: 14,
+    blurMask: 20,
   };
 }
 
@@ -101,7 +101,7 @@ function regionForFaceBox(
       ),
       ellipseRx: 0.36,
       ellipseRy: 0.42,
-      blurMask: 18,
+      blurMask: 24,
     };
   }
 
@@ -117,7 +117,7 @@ function regionForFaceBox(
       ),
       ellipseRx: 0.36,
       ellipseRy: 0.42,
-      blurMask: 18,
+      blurMask: 22,
     };
   }
 
@@ -125,7 +125,7 @@ function regionForFaceBox(
     ...clampRegion(faceX, faceY, faceWidth, faceHeight, imageWidth, imageHeight),
     ellipseRx: 0.36,
     ellipseRy: 0.42,
-    blurMask: 18,
+    blurMask: 24,
   };
 }
 
@@ -164,20 +164,13 @@ function parseStyle(formData: FormData): Style {
   return "mosaic";
 }
 
-async function applyBlur(
-  source: Buffer,
-  style: Style,
-  strength: number,
+async function buildSoftMask(
   width: number,
   height: number,
   ellipseRx: number,
   ellipseRy: number,
   blurMask: number
 ) {
-  const sigma = style === "lens" ? Math.max(6, strength * 4) : Math.max(3, strength * 3);
-
-  const region = await sharp(source).blur(sigma).ensureAlpha().png().toBuffer();
-
   const maskSvg = Buffer.from(`
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -202,25 +195,62 @@ async function applyBlur(
     </svg>
   `);
 
-  const alphaMask = await sharp(maskSvg)
+  return sharp(maskSvg)
     .resize(width, height)
     .ensureAlpha()
     .extractChannel("alpha")
     .toBuffer();
-
-  return sharp(region).joinChannel(alphaMask).png().toBuffer();
 }
 
-async function applyPixelate(source: Buffer, strength: number, width: number, height: number) {
+async function applySoftMask(
+  source: Buffer,
+  width: number,
+  height: number,
+  ellipseRx: number,
+  ellipseRy: number,
+  blurMask: number
+) {
+  const alphaMask = await buildSoftMask(width, height, ellipseRx, ellipseRy, blurMask);
+  return sharp(source).ensureAlpha().joinChannel(alphaMask).png().toBuffer();
+}
+
+async function applyBlur(
+  source: Buffer,
+  style: Style,
+  strength: number,
+  width: number,
+  height: number,
+  ellipseRx: number,
+  ellipseRy: number,
+  blurMask: number
+) {
+  const sigma = style === "lens" ? Math.max(6, strength * 4) : Math.max(3, strength * 3);
+
+  const region = await sharp(source).blur(sigma).png().toBuffer();
+
+  return applySoftMask(region, width, height, ellipseRx, ellipseRy, blurMask);
+}
+
+async function applyPixelate(
+  source: Buffer,
+  strength: number,
+  width: number,
+  height: number,
+  ellipseRx: number,
+  ellipseRy: number,
+  blurMask: number
+) {
   const block = Math.max(12, Math.floor(16 * strength));
   const downW = Math.max(3, Math.floor(width / block));
   const downH = Math.max(3, Math.floor(height / block));
 
-  return sharp(source)
+  const pixelated = await sharp(source)
     .resize(downW, downH, { kernel: "nearest" })
     .resize(width, height, { kernel: "nearest" })
     .png()
     .toBuffer();
+
+  return applySoftMask(pixelated, width, height, ellipseRx, ellipseRy, blurMask);
 }
 
 export async function POST(req: NextRequest) {
@@ -256,7 +286,7 @@ export async function POST(req: NextRequest) {
               ...clampRegion(x, y, width, height, imageWidth, imageHeight),
               ellipseRx: 0.36,
               ellipseRy: 0.42,
-              blurMask: 18,
+              blurMask: 24,
             }
           : regionForFaceBox(scope, imageWidth, imageHeight, x, y, width, height)
         : regionForScope(scope, imageWidth, imageHeight);
@@ -273,7 +303,15 @@ export async function POST(req: NextRequest) {
 
     const regionOutput =
       style === "mosaic"
-        ? await applyPixelate(extracted, strength, region.width, region.height)
+        ? await applyPixelate(
+            extracted,
+            strength,
+            region.width,
+            region.height,
+            region.ellipseRx,
+            region.ellipseRy,
+            region.blurMask
+          )
         : await applyBlur(
             extracted,
             style,
