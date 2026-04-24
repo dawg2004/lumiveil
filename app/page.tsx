@@ -67,6 +67,7 @@ export default function Home() {
   const [mosaicStrength, setMosaicStrength] = useState("中");
   const [mosaicLoading, setMosaicLoading] = useState(false);
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
+  const [mosaicImageSize, setMosaicImageSize] = useState<{ width: number; height: number } | null>(null);
   const [mosaicBox, setMosaicBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [mosaicFaceBox, setMosaicFaceBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [mosaicStage, setMosaicStage] = useState("");
@@ -148,6 +149,104 @@ export default function Home() {
 
     return clampRegion(faceX, faceY, faceW, faceH);
   };
+
+  const clampMosaicRegion = useCallback(
+    (region: { x: number; y: number; width: number; height: number }) => {
+      if (!mosaicImageSize) {
+        return region;
+      }
+
+      const width = Math.max(1, Math.min(Math.round(region.width), mosaicImageSize.width));
+      const height = Math.max(1, Math.min(Math.round(region.height), mosaicImageSize.height));
+
+      return {
+        x: Math.max(0, Math.min(Math.round(region.x), mosaicImageSize.width - width)),
+        y: Math.max(0, Math.min(Math.round(region.y), mosaicImageSize.height - height)),
+        width,
+        height,
+      };
+    },
+    [mosaicImageSize]
+  );
+
+  const nudgeMosaicBox = useCallback(
+    (dx: number, dy: number) => {
+      setMosaicBox(current => {
+        if (!current) return current;
+        return clampMosaicRegion({
+          ...current,
+          x: current.x + dx,
+          y: current.y + dy,
+        });
+      });
+    },
+    [clampMosaicRegion]
+  );
+
+  const resizeMosaicBox = useCallback(
+    (delta: number) => {
+      setMosaicBox(current => {
+        if (!current) return current;
+
+        const nextWidth = current.width + delta;
+        const nextHeight = current.height + delta;
+        const centerX = current.x + current.width / 2;
+        const centerY = current.y + current.height / 2;
+
+        return clampMosaicRegion({
+          x: centerX - nextWidth / 2,
+          y: centerY - nextHeight / 2,
+          width: nextWidth,
+          height: nextHeight,
+        });
+      });
+    },
+    [clampMosaicRegion]
+  );
+
+  const handleMosaicUpload = useCallback(async (file: File) => {
+    const imageUrl = URL.createObjectURL(file);
+    setMosaicSrc(imageUrl);
+    setMosaicImage(null);
+    setMosaicBox(null);
+    setMosaicFaceBox(null);
+
+    const bitmap = await createImageBitmap(file);
+    const imageSize = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    setMosaicImageSize(imageSize);
+
+    setMosaicStage("MediaPipe Face Detection で顔を検出中...");
+    try {
+      const faceBox = await detectFirstFace(file);
+      setMosaicFaceBox(faceBox);
+      setMosaicBox(faceBox ? buildRegionBox(faceBox, mosaicArea) : null);
+      if (!faceBox) {
+        setMosaicStage("顔が見つからなかったため、位置調整は手動になります。");
+        return;
+      }
+      setMosaicStage("顔を検出しました。必要なら枠を微調整してください。");
+    } catch {
+      setMosaicStage("顔検出に失敗しました。位置調整は手動で行えます。");
+    }
+  }, [mosaicArea]);
+
+  const redetectMosaicFace = useCallback(async () => {
+    if (!mosaicSrc) return;
+
+    setMosaicStage("MediaPipe Face Detection で再検出中...");
+    try {
+      const res = await fetch(mosaicSrc);
+      const blob = await res.blob();
+      const file = new File([blob], "mosaic-redetect.jpg", { type: blob.type || "image/jpeg" });
+      const faceBox = await detectFirstFace(file);
+      setMosaicFaceBox(faceBox);
+      setMosaicBox(faceBox ? buildRegionBox(faceBox, mosaicArea) : null);
+      setMosaicStage(faceBox ? "再検出しました。必要なら枠を微調整してください。" : "顔が見つかりませんでした。");
+    } catch {
+      setMosaicStage("再検出に失敗しました。");
+    }
+  }, [mosaicArea, mosaicSrc]);
 
   const applyMosaic = async (imageUrl: string, mode: "blur" | "gaussian") => {
     setMosaicLoading(true);
@@ -260,21 +359,6 @@ export default function Home() {
           <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.12em", color: "#f0ece4" }}>LUMIVEIL</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <a
-            href="/gpts"
-            style={{
-              padding: "8px 12px",
-              borderRadius: 999,
-              border: "1px solid rgba(201,168,76,0.35)",
-              background: "rgba(201,168,76,0.08)",
-              color: "#f0ece4",
-              fontSize: 12,
-              fontWeight: 700,
-              textDecoration: "none",
-            }}
-          >
-            GPTs 版を開く
-          </a>
           <div style={{ background: "rgba(201,168,76,0.1)", border: "1px solid rgba(201,168,76,0.25)", borderRadius: 20, padding: "4px 12px", fontSize: 12, color: "#c9a84c" }}>
             ◆ {credits} クレジット
           </div>
@@ -372,424 +456,4 @@ export default function Home() {
               </div>
 
               <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", minHeight: 400 }}>
-                <div style={{ fontSize: 11, color: "#444", marginBottom: 14 }}>生成結果</div>
-                {step === "generating" && (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 320, gap: 16 }}>
-                    <div style={{ fontSize: 40 }}>✦</div>
-                    <div style={{ fontSize: 13, color: "#333" }}>AIが画像を生成中...</div>
-                    <div style={{ width: "80%", height: 4, background: "#a89e8e", borderRadius: 2 }}>
-                      <div style={{ height: "100%", width: "60%", background: "linear-gradient(90deg, #c9a84c, #f0d080)", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite" }} />
-                    </div>
-                  </div>
-                )}
-                {step === "done" && (
-                  <div>
-                    <div style={{ display: "grid", gridTemplateColumns: generated.length === 1 ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 12 }}>
-                      {generated.map((src, i) => (
-                        <div key={i} style={{ position: "relative", borderRadius: 8, overflow: "hidden" }}>
-                          <img src={src} alt="" style={{ width: "100%", aspectRatio: "2/3", objectFit: "cover", display: "block" }} />
-                          <button style={{ position: "absolute", bottom: 6, right: 6, background: "rgba(0,0,0,0.7)", border: "1px solid rgba(201,168,76,0.5)", borderRadius: 6, color: "#c9a84c", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>保存</button>
-                          <div style={{ position: "absolute", bottom: 6, left: 6, display: "flex", gap: 4 }}>
-                            <button onClick={() => applyMosaic(src, "blur")} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, color: "#fff", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>ブラー</button>
-                            <button onClick={() => applyMosaic(src, "gaussian")} style={{ background: "rgba(0,0,0,0.7)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 6, color: "#fff", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>ガウス</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => { setStep("upload"); setGenerated([]); }} style={{ width: "100%", padding: "8px 0", background: "transparent", border: "1px solid #a89e8e", borderRadius: 8, color: "#333", fontSize: 12, cursor: "pointer" }}>
-                      設定を変えてもう一度生成
-                    </button>
-                  </div>
-                )}
-                {step !== "generating" && step !== "done" && (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 320, gap: 12, color: "#555" }}>
-                    <div style={{ fontSize: 48 }}>✦</div>
-                    <div style={{ fontSize: 13 }}>生成画像はここに表示されます</div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {tab === "avatar" && (
-            <div className="two-col" style={{ display: "grid", gap: 20 }}>
-              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: 11, color: "#444", letterSpacing: "0.05em" }}>キャスト登録</div>
-                <input value={castName} onChange={e => setCastName(e.target.value)} placeholder="キャスト名" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13 }} />
-                <div onDrop={handleDrop} onDragOver={e => e.preventDefault()} style={{ border: "1px dashed #8a8174", borderRadius: 10, padding: 18, background: "rgba(0,0,0,0.03)", textAlign: "center", color: "#444" }}>
-                  <div style={{ fontSize: 13, marginBottom: 8 }}>画像をドラッグ&ドロップ</div>
-                  <div style={{ fontSize: 11, marginBottom: 10 }}>または</div>
-                  <button onClick={() => inputRef.current?.click()} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid #a89e8e", background: "#b0a898", color: "#111", fontSize: 12, cursor: "pointer" }}>画像を選択</button>
-                  <input ref={inputRef} type="file" accept="image/*" multiple onChange={e => setFiles(prev => [...prev, ...(Array.from(e.target.files || []).slice(0, 15 - prev.length))])} style={{ display: "none" }} />
-                </div>
-                {files.length > 0 && <div style={{ fontSize: 11, color: "#444" }}>{files.length}枚選択中</div>}
-                {avatarCreating && (
-                  <div style={{ width: "100%", height: 8, background: "#a89e8e", borderRadius: 999, overflow: "hidden" }}>
-                    <div style={{ width: `${avatarProgress}%`, height: "100%", background: "linear-gradient(90deg, #c9a84c, #f0d080)" }} />
-                  </div>
-                )}
-                <button onClick={handleCreateAvatar} disabled={avatarCreating || !castName || files.length === 0} style={{ width: "100%", padding: "12px 0", borderRadius: 8, border: "none", background: castName && files.length ? "linear-gradient(135deg, #c9a84c, #8b6914)" : "rgba(201,168,76,0.1)", color: castName && files.length ? "#071e28" : "#555", fontWeight: 700, fontSize: 13, cursor: castName && files.length ? "pointer" : "not-allowed" }}>
-                  {avatarCreating ? "登録中..." : "キャストを登録する"}
-                </button>
-              </div>
-
-              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e" }}>
-                <div style={{ fontSize: 11, color: "#444", marginBottom: 12, letterSpacing: "0.05em" }}>登録済みキャスト</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {avatars.map(av => (
-                    <div key={av.id} style={{ padding: "12px 14px", borderRadius: 10, background: "rgba(0,0,0,0.04)", border: "1px solid #a89e8e", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                      {editingId === av.id ? (
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}>
-                          <input value={editingName} onChange={e => setEditingName(e.target.value)} style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13 }} />
-                          <button onClick={() => saveEditingAvatar(av.id)} style={{ padding: "8px 12px", borderRadius: 8, border: "none", background: "#c9a84c", color: "#071e28", fontWeight: 700, fontSize: 12, cursor: "pointer" }}>保存</button>
-                          <button onClick={cancelEditingAvatar} style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "transparent", color: "#333", fontSize: 12, cursor: "pointer" }}>取消</button>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                            <div style={{ fontSize: 22 }}>👤</div>
-                            <div>
-                              <div style={{ fontWeight: 600, color: "#111", fontSize: 13 }}>{av.name}</div>
-                              <div style={{ fontSize: 10, color: "#444" }}>{av.date}</div>
-                            </div>
-                          </div>
-                          <button onClick={() => startEditingAvatar(av.id, av.name)} style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#b0a898", color: "#111", fontSize: 12, cursor: "pointer" }}>編集</button>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {tab === "mosaic" && (
-            <div className="two-col" style={{ display: "grid", gap: 20 }}>
-              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>キャストを選択</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {avatars.map(av => (
-                      <div key={av.id} onClick={() => { setSelectedAvatar(av.id); (window as any)._mosaicSrc = null; setMosaicImage(null); setMosaicBox(null); setMosaicFaceBox(null); }} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 8, background: selectedAvatar === av.id ? "rgba(201,168,76,0.15)" : "rgba(0,0,0,0.04)", border: selectedAvatar === av.id ? "1px solid rgba(201,168,76,0.5)" : "1px solid #a89e8e", cursor: "pointer" }}>
-                        <div style={{ fontSize: 22 }}>👤</div>
-                        <div style={{ fontWeight: 500, fontSize: 13, color: "#111" }}>{av.name}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
-                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    📁 画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setMosaicSrc(URL.createObjectURL(f)); setMosaicImage(null); setMosaicBox(null); setMosaicFaceBox(null); } }} style={{ display: "none" }} />
-                  </label>
-                  {mosaicSrc && (
-                    <div style={{ marginTop: 10, position: "relative", background: "#000", borderRadius: 8, overflow: "hidden" }}>
-                      <img
-                        src={mosaicSrc}
-                        alt="preview"
-                        style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", display: "block" }}
-                      />
-                      {mosaicBox && (
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: `${mosaicBox.x}px`,
-                            top: `${mosaicBox.y}px`,
-                            width: `${mosaicBox.width}px`,
-                            height: `${mosaicBox.height}px`,
-                            border: "2px solid #f0c85a",
-                            borderRadius: mosaicArea === "顔全体" ? "999px" : 10,
-                            boxShadow: "0 0 0 9999px rgba(0,0,0,0.16)",
-                            pointerEvents: "none",
-                          }}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>加工範囲</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {["顔全体", "目元のみ", "口元のみ"].map(area => (
-                      <button key={area} onClick={() => { setMosaicArea(area); setMosaicImage(null); setMosaicBox(mosaicFaceBox ? buildRegionBox(mosaicFaceBox, area) : null); }} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicArea === area ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicArea === area ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{area}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>強度</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {["弱", "中", "強", "最強"].map((level) => (
-                      <button key={level} onClick={() => setMosaicStrength(level)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: mosaicStrength === level ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: mosaicStrength === level ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{level}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>エフェクト</div>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={() => mosaicSrc && applyMosaic(mosaicSrc, "blur")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ブラー</button>
-                    <button onClick={() => mosaicSrc && applyMosaic(mosaicSrc, "gaussian")} style={{ flex: 1, padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>ガウス</button>
-                  </div>
-                </div>
-
-                {mosaicLoading && (
-                  <div style={{ marginTop: 6, padding: "12px 14px", borderRadius: 8, background: "rgba(201,168,76,0.12)", border: "1px solid rgba(201,168,76,0.35)", color: "#6f5310", fontSize: 13, fontWeight: 700 }}>
-                    {mosaicStage || "加工中..."}
-                  </div>
-                )}
-
-              </div>
-            </div>
-          )}
-
-          {tab === "edit" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>AI画像編集</div>
-              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>画像をアップロード</div>
-                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setEditSrc(URL.createObjectURL(f)); setEditResult(null); } }} style={{ display: "none" }} />
-                  </label>
-                </div>
-                {mosaicSrc && <img src={mosaicSrc} alt="preview" style={{ width: "100%", borderRadius: 8, marginBottom: 4, objectFit: "contain", background: "#000" }} />}
-                {editSrc && <img src={editSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000" }} />}
-                {editResult && <div><div style={{ fontSize: 11, color: "#444", marginBottom: 4 }}>編集結果</div><img src={editResult} alt="result" style={{ width: "100%", borderRadius: 8 }} /></div>}
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>編集の指示（チャット）</div>
-                  <textarea placeholder="例：背景を白にして、明るくして、コントラストを上げて" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13, minHeight: 80, resize: "none", boxSizing: "border-box" }} id="editPrompt" />
-                </div>
-                <button onClick={async () => {
-                  if (!editSrc) return alert("画像を選択してください");
-                  const prompt = (document.getElementById("editPrompt") as HTMLTextAreaElement)?.value;
-                  if (!prompt) return alert("編集の指示を入力してください");
-                  const blob = await fetch(editSrc).then(r => r.blob());
-                  const form = new FormData();
-                  form.append("file", blob, "image.jpg");
-                  const up = await fetch("https://fal.run/storage/upload", { method: "POST", headers: { "Authorization": "Key " + process.env.NEXT_PUBLIC_FAL_API_KEY }, body: form });
-                  const upData = await up.json();
-                  const res = await fetch("/api/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: upData.url, prompt }) });
-                  const data = await res.json();
-                  if (data.url) { setEditResult(data.url); }
-                }} style={{ width: "100%", padding: "13px 0", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", border: "none", color: "#071e28", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                  AI編集を実行
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tab === "video" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 4px" }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>動画生成</div>
-              <div style={{ background: "#c8c2b4", borderRadius: 12, padding: 18, border: "1px solid #a89e8e", display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>元画像をアップロード</div>
-                  <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px 0", borderRadius: 8, background: "#b0a898", border: "1px solid #a89e8e", color: "#111", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                    画像を選択する
-                    <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) { setVideoSrc(URL.createObjectURL(f)); setVideoResult(null); } }} style={{ display: "none" }} />
-                  </label>
-                </div>
-                {videoSrc && <img src={videoSrc} alt="preview" style={{ width: "100%", borderRadius: 8, maxHeight: 400, objectFit: "contain", background: "#000" }} />}
-                {videoResult && <div><div style={{ fontSize: 11, color: "#444", marginBottom: 4 }}>生成動画</div><video src={videoResult} controls style={{ width: "100%", borderRadius: 8 }} /></div>}
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>動画の説明（任意）</div>
-                  <textarea placeholder="例：ゆっくり微笑んでいる、髪がなびいている" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #a89e8e", background: "#d4cfc8", color: "#111", fontSize: 13, minHeight: 60, resize: "none", boxSizing: "border-box" }} id="videoPrompt" />
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: "#444", marginBottom: 8 }}>動画の長さ</div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {[["3秒","3"], ["5秒","5"], ["10秒","10"]].map(([label, val]) => (
-                      <button key={val} onClick={() => setVideoDuration(val)} style={{ flex: 1, padding: "10px 0", borderRadius: 8, background: videoDuration === val ? "rgba(201,168,76,0.3)" : "rgba(0,0,0,0.06)", border: videoDuration === val ? "1px solid #c9a84c" : "1px solid #a89e8e", color: "#111", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{label}</button>
-                    ))}
-                  </div>
-                </div>
-                <button onClick={async () => {
-                  if (!videoSrc) return alert("画像を選択してください");
-                  const prompt = (document.getElementById("videoPrompt") as HTMLTextAreaElement)?.value || "";
-                  const blob = await fetch(videoSrc).then(r => r.blob());
-                  const form = new FormData();
-                  form.append("file", blob, "image.jpg");
-                  const up = await fetch("https://fal.run/storage/upload", { method: "POST", headers: { "Authorization": "Key " + process.env.NEXT_PUBLIC_FAL_API_KEY }, body: form });
-                  const upData = await up.json();
-                  const res = await fetch("/api/video", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: upData.url, prompt }) });
-                  const data = await res.json();
-                  if (data.url) { setVideoResult(data.url); }
-                  else { alert("エラー: " + (data.error || "不明")); }
-                }} style={{ width: "100%", padding: "13px 0", borderRadius: 8, background: "linear-gradient(135deg, #c9a84c, #8b6914)", border: "none", color: "#071e28", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                  動画を生成する
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tab === "history" && (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 400, color: "#aaa" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>◎</div>
-              <div>生成履歴（実装予定）</div>
-            </div>
-          )}
-
-          {tab === "plan" && (
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>プラン・料金</div>
-              <div className="two-col" style={{ display: "grid", gap: 14 }}>
-                {PLANS.map(plan => ({
-                  ...plan,
-                  priceId: process.env[`NEXT_PUBLIC_STRIPE_PRICE_${plan.priceId}`],
-                })).map(plan => (
-                  <div key={plan.name} style={{ background: plan.current ? "rgba(201,168,76,0.07)" : "#0d2e3a", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1a3d4d"}`, borderRadius: 12, padding: 20, position: "relative" }}>
-                    {plan.current && <div style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", background: "#c9a84c", color: "#071e28", fontSize: 9, padding: "2px 10px", borderRadius: 20, fontWeight: 700 }}>現在のプラン</div>}
-                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: plan.color }}>{plan.name}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 2 }}>¥{plan.price}<span style={{ fontSize: 11, color: "#aaa" }}>/月</span></div>
-                    <div style={{ fontSize: 12, color: "#aaa", marginBottom: 14 }}>{plan.credits.toLocaleString()} クレジット/月</div>
-                    <button style={{ width: "100%", padding: "8px 0", background: plan.current ? "rgba(201,168,76,0.15)" : "rgba(255,255,255,0.06)", border: `1px solid ${plan.current ? "rgba(201,168,76,0.4)" : "#1e4d5f"}`, borderRadius: 8, color: plan.current ? "#c9a84c" : "#666", fontSize: 12, cursor: "pointer" }} onClick={async () => { if (!plan.current && plan.priceId) { const res = await fetch("/api/stripe/checkout", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ priceId: plan.priceId }) }); const data = await res.json(); if (data.url) window.location.href = data.url; } }}>
-                      {plan.current ? "現在のプラン" : "変更する"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {mosaicImage && mosaicSrc && (
-        <div
-          onClick={() => setMosaicImage(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            zIndex: 100,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 16,
-            padding: 20,
-          }}
-        >
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              width: "min(920px, 92vw)",
-              background: "#102733",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 14,
-              padding: 18,
-              display: "flex",
-              flexDirection: "column",
-              gap: 14,
-            }}
-          >
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#f0ece4" }}>比較表示</div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: 14,
-              }}
-            >
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#c9a84c" }}>加工前</div>
-                <div
-                  style={{
-                    height: 300,
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    background: "#000",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <img
-                    src={mosaicSrc}
-                    alt="before"
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#c9a84c" }}>加工後</div>
-                <div
-                  style={{
-                    height: 300,
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    background: "#000",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <img
-                    src={mosaicImage}
-                    alt="after"
-                    style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <a
-                href={mosaicImage}
-                download="mosaic.png"
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  background: "linear-gradient(135deg, #c9a84c, #8b6914)",
-                  color: "#071e28",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  textDecoration: "none",
-                }}
-              >
-                保存
-              </a>
-              <button
-                onClick={() => setMosaicImage(null)}
-                style={{
-                  padding: "10px 24px",
-                  borderRadius: 8,
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  color: "#fff",
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: "pointer",
-                }}
-              >
-                閉じる
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="bottom-nav" style={{ justifyContent: "space-around" }}>
-        {NAV_ITEMS.map(item => (
-          <button key={item.id} onClick={() => setTab(item.id)} style={{
-            flex: 1, padding: "10px 0", border: "none", background: "transparent", cursor: "pointer",
-            color: tab === item.id ? "#c9a84c" : "#555",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-            borderTop: tab === item.id ? "2px solid #c9a84c" : "2px solid transparent",
-          }}>
-            <span style={{ fontSize: 18 }}>{item.icon}</span>
-            <span style={{ fontSize: 9 }}>{item.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+                  ...
