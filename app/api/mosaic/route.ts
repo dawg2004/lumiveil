@@ -320,11 +320,30 @@ async function applySimplePixelate(source: Buffer, strength: number, width: numb
   const downW = Math.max(1, Math.floor(width / blockSize));
   const downH = Math.max(1, Math.floor(height / blockSize));
 
-  return sharp(source)
+  const pixelated = await sharp(source)
     .resize(downW, downH, { kernel: "nearest" })
     .resize(width, height, { kernel: "nearest" })
+    .greyscale()
+    .linear(1.75, 65)
+    .modulate({ brightness: 1.35, saturation: 0.05 })
+    .composite([
+      {
+        input: Buffer.from([255, 255, 255, 255]),
+        raw: { width: 1, height: 1, channels: 4 },
+        tile: true,
+        blend: "screen",
+      },
+      {
+        input: Buffer.from([255, 255, 255, 230]),
+        raw: { width: 1, height: 1, channels: 4 },
+        tile: true,
+        blend: "over",
+      },
+    ])
     .png()
     .toBuffer();
+
+  return pixelated;
 }
 
 export async function POST(req: NextRequest) {
