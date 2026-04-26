@@ -459,7 +459,7 @@ export async function POST(req: NextRequest) {
             );
 
     if (scope === "eyes_only") {
-      regionOutput = await whitenOutput(regionOutput, 0.74);
+      regionOutput = await whitenOutput(regionOutput, 0.95);
     }
 
     const output = await sharp(bytes)
