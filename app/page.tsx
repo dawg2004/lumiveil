@@ -9,7 +9,7 @@ type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; icon: string }> = [
-  { id: "generate", label: "画像生成", icon: "*" },
+  { id: "generate", label: "画像生成（工事中）", icon: "*" },
   { id: "avatar", label: "キャスト登録", icon: "A" },
   { id: "mosaic", label: "モザイク", icon: "M" },
   { id: "edit", label: "AI編集", icon: "E" },
