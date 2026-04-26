@@ -271,6 +271,23 @@ async function applySoftMask(
   return sharp(source).ensureAlpha().joinChannel(alphaMask).png().toBuffer();
 }
 
+async function whitenOutput(source: Buffer, opacity: number) {
+  return sharp(source)
+    .greyscale()
+    .linear(1.6, 58)
+    .modulate({ brightness: 1.28, saturation: 0.02 })
+    .composite([
+      {
+        input: Buffer.from([255, 255, 255, Math.round(255 * opacity)]),
+        raw: { width: 1, height: 1, channels: 4 },
+        tile: true,
+        blend: "over",
+      },
+    ])
+    .png()
+    .toBuffer();
+}
+
 async function applyBlur(
   source: Buffer,
   style: Style,
@@ -415,31 +432,35 @@ export async function POST(req: NextRequest) {
       .png()
       .toBuffer();
 
-    const regionOutput =
+    let regionOutput =
       style === "simple_mosaic"
         ? await applySimplePixelate(extracted, strength, region.width, region.height)
         : style === "mosaic"
-        ? await applyPixelate(
-            extracted,
-            strength,
-            region.width,
-            region.height,
-            region.ellipseRx,
-            region.ellipseRy,
-            region.blurMask,
-            region.maskShape
-          )
-        : await applyBlur(
-            extracted,
-            style,
-            strength,
-            region.width,
-            region.height,
-            region.ellipseRx,
-            region.ellipseRy,
-            region.blurMask,
-            region.maskShape
-          );
+          ? await applyPixelate(
+              extracted,
+              strength,
+              region.width,
+              region.height,
+              region.ellipseRx,
+              region.ellipseRy,
+              region.blurMask,
+              region.maskShape
+            )
+          : await applyBlur(
+              extracted,
+              style,
+              strength,
+              region.width,
+              region.height,
+              region.ellipseRx,
+              region.ellipseRy,
+              region.blurMask,
+              region.maskShape
+            );
+
+    if (scope === "eyes_only") {
+      regionOutput = await whitenOutput(regionOutput, 0.74);
+    }
 
     const output = await sharp(bytes)
       .composite([
