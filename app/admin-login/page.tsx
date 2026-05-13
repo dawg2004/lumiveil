@@ -105,6 +105,12 @@ export default function AdminLoginPage() {
         <div style={{ marginTop: 14, minHeight: 22, color: status.includes("失敗") || status.includes("違") || status.includes("未設定") || status.includes("許可") ? "#b84242" : "#4e4a43", fontSize: 12 }}>
           {status}
         </div>
+
+        <div style={{ marginTop: 20, borderTop: "1px solid #b0a898", paddingTop: 16, textAlign: "center" }}>
+          <a href="/login" style={{ color: "#8a8070", fontSize: 11, textDecoration: "none" }}>
+            通常ログインページへ
+          </a>
+        </div>
       </div>
     </main>
   );
