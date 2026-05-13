@@ -6,6 +6,13 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 const FAL_KEY = process.env.FAL_API_KEY!;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
+function createAdminSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 const MODEL_IDS: Record<string, string> = {
   grok: "xai/grok-imagine-video/image-to-video",
   seedance: "bytedance/seedance-2.0/fast/image-to-video",
@@ -55,21 +62,20 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
 }
 
 async function saveVideoHistory({
-  client,
   userId,
   model,
   prompt,
   videoUrl,
   creditsUsed,
 }: {
-  client: SupabaseClient;
   userId: string;
   model: string;
   prompt: string;
   videoUrl: string;
   creditsUsed: number;
 }) {
-  const { data: shop } = await client
+  const adminClient = createAdminSupabaseClient();
+  const { data: shop } = await adminClient
     .from("shops")
     .select("id")
     .eq("user_id", userId)
@@ -81,19 +87,12 @@ async function saveVideoHistory({
     url: videoUrl,
   });
 
-  const { data: existing } = await client
-    .from("generation_history")
-    .select("id")
-    .eq("shop_id", shopId)
-    .eq("prompt", historyPrompt)
-    .maybeSingle();
-
-  if (existing) return;
-
-  const { error } = await client.from("generation_history").insert({
+  const { error } = await adminClient.from("generation_history").insert({
     shop_id: shopId,
     avatar_id: null,
     prompt: historyPrompt,
+    image_urls: [videoUrl],
+    settings: { media_type: "video" },
     credits_used: creditsUsed,
   });
 
@@ -195,11 +194,10 @@ export async function GET(req: NextRequest) {
       if (!videoUrl) {
         throw new Error("result video url is missing");
       }
-      const { user, client } = await getAuthenticatedContext(req);
+      const { user } = await getAuthenticatedContext(req);
       if (user) {
         const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
         await saveVideoHistory({
-          client,
           userId: user.id,
           model,
           prompt,
