@@ -3,10 +3,12 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const PLAN_CREDITS: Record<string, number> = {
   basic: 650, standard: 1600, mega: 4800,
@@ -49,19 +51,19 @@ export async function POST(req: NextRequest) {
 
         if (shop) {
           const nextCredits = Number(shop.credits ?? 0) + credits;
-          await supabase.from("shops").update({ credits: nextCredits }).eq("id", shop.id);
-          await supabase.from("credit_transactions").insert({
+          await getAdminClient().from("shops").update({ credits: nextCredits }).eq("id", shop.id);
+          await getAdminClient().from("credit_transactions").insert({
             shop_id: shop.id, type: "topup",
             amount: credits, description: `${packId}クレジットチャージ`,
             stripe_id: session.id,
           });
         } else {
-          const { data: newShop } = await supabase.from("shops").insert({
+          const { data: newShop } = await getAdminClient().from("shops").insert({
             user_id: userId, name: "新規店舗", plan: "free", credits,
           }).select("id").single();
 
           if (newShop) {
-            await supabase.from("credit_transactions").insert({
+            await getAdminClient().from("credit_transactions").insert({
               shop_id: newShop.id, type: "topup",
               amount: credits, description: `${packId}クレジットチャージ`,
               stripe_id: session.id,
@@ -83,14 +85,14 @@ export async function POST(req: NextRequest) {
         .from("shops").select("id").eq("user_id", userId).single();
 
       if (shop) {
-        await supabase.from("shops").update({ plan, credits }).eq("id", shop.id);
-        await supabase.from("credit_transactions").insert({
+        await getAdminClient().from("shops").update({ plan, credits }).eq("id", shop.id);
+        await getAdminClient().from("credit_transactions").insert({
           shop_id: shop.id, type: "subscription",
           amount: credits, description: `${plan}プラン加入・クレジット付与`,
           stripe_id: session.id,
         });
       } else {
-        await supabase.from("shops").insert({
+        await getAdminClient().from("shops").insert({
           user_id: userId, name: "新規店舗", plan, credits,
         });
       }
@@ -122,8 +124,8 @@ export async function POST(req: NextRequest) {
         .from("shops").select("id").eq("user_id", userId).single();
 
       if (shop) {
-        await supabase.from("shops").update({ plan, credits }).eq("id", shop.id);
-        await supabase.from("credit_transactions").insert({
+        await getAdminClient().from("shops").update({ plan, credits }).eq("id", shop.id);
+        await getAdminClient().from("credit_transactions").insert({
           shop_id: shop.id, type: "subscription",
           amount: credits, description: `${plan}プラン 月次クレジットリセット`,
           stripe_id: invoice.id,
@@ -137,7 +139,7 @@ export async function POST(req: NextRequest) {
       const userId = subscription.metadata?.userId;
       if (!userId) break;
 
-      await supabase.from("shops")
+      await getAdminClient().from("shops")
         .update({ plan: "free", credits: 0 })
         .eq("user_id", userId);
       break;

@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const MAX_AVATARS_PER_SHOP = 200;
 
 export async function POST(req: NextRequest) {
   try {
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token!);
+    const { data: { user }, error: authError } = await getAdminClient().auth.getUser(token!);
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const formData = await req.formData();
@@ -44,10 +46,10 @@ export async function POST(req: NextRequest) {
       const file = files[i];
       const buffer = await file.arrayBuffer();
       const fileName = `avatars/${user.id}/temp/${Date.now()}_${i}.jpg`;
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await getAdminClient().storage
         .from("cast-photos").upload(fileName, buffer, { contentType: file.type });
       if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from("cast-photos").getPublicUrl(fileName);
+        const { data: { publicUrl } } = getAdminClient().storage.from("cast-photos").getPublicUrl(fileName);
         uploadedUrls.push(publicUrl);
       }
     }
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
 
     if (insertError) throw new Error(insertError.message);
 
-    await supabase.from("shops").update({ credits: shopData.credits - 50 }).eq("user_id", user.id);
+    await getAdminClient().from("shops").update({ credits: shopData.credits - 50 }).eq("user_id", user.id);
 
     return NextResponse.json({
       success: true,
@@ -75,7 +77,7 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
-  const { data: { user } } = await supabase.auth.getUser(token!);
+  const { data: { user } } = await getAdminClient().auth.getUser(token!);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: shopData } = await supabase
