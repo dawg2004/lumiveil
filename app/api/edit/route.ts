@@ -116,8 +116,19 @@ async function saveGenerationHistory(adminClient: SupabaseClient, userId: string
     throw new Error(shopError.message);
   }
 
+  const shopId = shop?.id ?? userId;
+
+  const { data: existing } = await adminClient
+    .from("generation_history")
+    .select("id")
+    .eq("shop_id", shopId)
+    .contains("image_urls", [generatedUrl])
+    .maybeSingle();
+
+  if (existing) return;
+
   const { error } = await adminClient.from("generation_history").insert({
-    shop_id: shop?.id ?? userId,
+    shop_id: shopId,
     avatar_id: null,
     prompt: encodeHistoryPrompt({
       kind: "image",

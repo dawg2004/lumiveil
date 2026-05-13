@@ -85,6 +85,16 @@ async function saveVideoHistory({
     .eq("user_id", userId)
     .maybeSingle();
   const shopId = shop?.id ?? userId;
+
+  const { data: existing } = await adminClient
+    .from("generation_history")
+    .select("id")
+    .eq("shop_id", shopId)
+    .contains("image_urls", [videoUrl])
+    .maybeSingle();
+
+  if (existing) return;
+
   const historyPrompt = encodeHistoryPrompt({
     kind: "video",
     prompt: `${model === "seedance" ? "Seedance動画" : "Grok動画"}: ${prompt}`,
