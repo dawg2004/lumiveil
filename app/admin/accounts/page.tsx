@@ -25,6 +25,8 @@ export default function AdminAccountsPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+  const [falBalance, setFalBalance] = useState<number | null>(null);
+  const FAL_CREDIT_THRESHOLD = 2;
 
   const totalCredits = useMemo(
     () => accounts.reduce((total, account) => total + Number(account.credits ?? 0), 0),
@@ -79,6 +81,13 @@ export default function AdminAccountsPage() {
 
   useEffect(() => {
     void loadAccounts();
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/fal-credits");
+        const data = await res.json();
+        if (res.ok && typeof data.balance === "number") setFalBalance(data.balance);
+      } catch { /* non-critical */ }
+    })();
   }, [loadAccounts]);
 
   const updateDraft = useCallback((id: string, field: "credits" | "plan" | "shop_name", value: string) => {
@@ -150,6 +159,20 @@ export default function AdminAccountsPage() {
             <p style={{ marginTop: 6, color: "#9ba8ae", fontSize: 13 }}>クレジット残高・プラン・ショップ名を直接編集できます。shops が無いユーザーは管理画面から作成できます。</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {falBalance !== null && (
+              <div style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                background: falBalance < FAL_CREDIT_THRESHOLD ? "#5c1a1a" : "#0d2e1e",
+                border: `1px solid ${falBalance < FAL_CREDIT_THRESHOLD ? "#b84242" : "#2a7a4a"}`,
+                color: falBalance < FAL_CREDIT_THRESHOLD ? "#f8d7d7" : "#6ee7a0",
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap" as const,
+              }}>
+                FAL ${falBalance.toFixed(2)}
+              </div>
+            )}
             <a href="/admin" style={smallButtonStyle}>生成履歴</a>
             <a href="/" style={smallButtonStyle}>アプリへ戻る</a>
             <button onClick={() => void loadAccounts()} disabled={loading} style={smallButtonStyle}>
