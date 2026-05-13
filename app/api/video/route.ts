@@ -20,7 +20,11 @@ const MODEL_IDS: Record<string, string> = {
 
 async function uploadToFal(file: File): Promise<string> {
   fal.config({ credentials: FAL_KEY });
-  return fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  try {
+    return await fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  } catch {
+    return fal.storage.upload(file);
+  }
 }
 
 function configureFal() {

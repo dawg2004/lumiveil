@@ -47,11 +47,18 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
 
 async function uploadToFal(file: File): Promise<string> {
   fal.config({ credentials: FAL_KEY });
-  return fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  try {
+    return await fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  } catch {
+    return fal.storage.upload(file);
+  }
 }
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
+    if (error.name === "ApiError" && error.message === "Forbidden") {
+      return "画像のアップロードに失敗しました（FAL API 認証エラー）。しばらく待ってから再度お試しください。";
+    }
     const cause = error.cause instanceof Error ? ` (${error.cause.message})` : "";
     return `${error.name}: ${error.message}${cause}`;
   }
