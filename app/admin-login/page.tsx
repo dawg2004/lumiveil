@@ -4,9 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 export default function AdminLoginPage() {
   const nextPath = useMemo(() => {
-    if (typeof window === "undefined") return "/admin";
+    if (typeof window === "undefined") return "/admin/accounts";
     const params = new URLSearchParams(window.location.search);
-    return params.get("next") || "/admin";
+    return params.get("next") || "/admin/accounts";
   }, []);
 
   const [email, setEmail] = useState("");
