@@ -10,6 +10,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // /login, /admin-login はそのまま通す（/admin チェックより先に評価）
+  if (pathname.startsWith('/login') || pathname.startsWith('/admin-login')) {
+    return NextResponse.next();
+  }
+
   // Admin routes: admin panel session cookie で認証
   if (pathname.startsWith('/admin')) {
     const token = request.cookies.get(ADMIN_PANEL_COOKIE_NAME)?.value;
@@ -24,11 +29,6 @@ export async function proxy(request: NextRequest) {
       }
       return NextResponse.redirect(url);
     }
-    return NextResponse.next();
-  }
-
-  // /login, /admin-login はそのまま通す
-  if (pathname.startsWith('/login') || pathname.startsWith('/admin-login')) {
     return NextResponse.next();
   }
 
