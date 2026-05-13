@@ -1190,9 +1190,30 @@ export default function Home() {
                     color: historyStatus.includes("ログイン") || historyStatus.includes("取得できません") ? "#b84242" : "#6f5310",
                     fontSize: 12,
                     fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                   }}
                 >
-                  {historyStatus}
+                  <span style={{ flex: 1 }}>{historyStatus}</span>
+                  {historyStatus.includes("ログイン状態を確認できませんでした") && (
+                    <a
+                      href="/login"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #b84242",
+                        background: "rgba(184,66,66,0.12)",
+                        color: "#b84242",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      再ログイン
+                    </a>
+                  )}
                 </div>
               ) : null}
 
