@@ -18,14 +18,11 @@ function isVideoHistoryUrl(url: string) {
   return cleanUrl.endsWith(".mp4") || cleanUrl.endsWith(".webm") || cleanUrl.endsWith(".mov");
 }
 
-const FAL_CREDIT_THRESHOLD = 2;
-
 export default function AdminPage() {
   const [items, setItems] = useState<AdminHistoryItem[]>([]);
   const [limit, setLimit] = useState(100);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
-  const [falBalance, setFalBalance] = useState<number | null>(null);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -47,22 +44,9 @@ export default function AdminPage() {
     }
   }, []);
 
-  const loadFalCredits = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/fal-credits");
-      const data = await res.json();
-      if (res.ok && typeof data.balance === "number") {
-        setFalBalance(data.balance);
-      }
-    } catch {
-      // non-critical — silently ignore
-    }
-  }, []);
-
   useEffect(() => {
     void loadHistory();
-    void loadFalCredits();
-  }, [loadHistory, loadFalCredits]);
+  }, [loadHistory]);
 
   return (
     <main style={{ minHeight: "100vh", background: "#071e28", color: "#f0ece4", fontFamily: "var(--font-lumiveil-sans)", padding: 18 }}>
@@ -74,20 +58,7 @@ export default function AdminPage() {
             <p style={{ marginTop: 6, color: "#9ba8ae", fontSize: 13 }}>管理者は全ユーザーの生成画像・動画を最新{limit}件まで確認できます。</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {falBalance !== null && (
-              <div style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                background: falBalance < FAL_CREDIT_THRESHOLD ? "#5c1a1a" : "#0d2e1e",
-                border: `1px solid ${falBalance < FAL_CREDIT_THRESHOLD ? "#b84242" : "#2a7a4a"}`,
-                color: falBalance < FAL_CREDIT_THRESHOLD ? "#f8d7d7" : "#6ee7a0",
-                fontSize: 12,
-                fontWeight: 600,
-                whiteSpace: "nowrap" as const,
-              }}>
-                FAL ${falBalance.toFixed(2)}
-              </div>
-            )}
+            <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noreferrer" style={falLinkStyle}>FALクレジット確認</a>
             <a href="/admin/accounts" style={smallButtonStyle}>アカウント管理</a>
             <a href="/" style={smallButtonStyle}>アプリへ戻る</a>
             <button onClick={() => void loadHistory()} disabled={loading} style={smallButtonStyle}>
@@ -95,15 +66,6 @@ export default function AdminPage() {
             </button>
           </div>
         </header>
-
-        {falBalance !== null && falBalance < FAL_CREDIT_THRESHOLD ? (
-          <div style={{ background: "#5c1a1a", border: "1px solid #b84242", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, color: "#f8d7d7" }}>
-            <span style={{ fontSize: 18 }}>⚠️</span>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>
-              FAL APIクレジット残高が不足しています（残高: ${falBalance.toFixed(2)}）。チャージしてください。
-            </span>
-          </div>
-        ) : null}
 
         {status ? (
           <div style={{ ...panelStyle, color: status.includes("権限") || status.includes("ログイン") ? "#b84242" : "#171717" }}>
@@ -183,4 +145,17 @@ const smallButtonStyle = {
   fontSize: 11,
   cursor: "pointer",
   textDecoration: "none",
+};
+
+const falLinkStyle = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "#0d2e1e",
+  border: "1px solid #2a7a4a",
+  color: "#6ee7a0",
+  fontWeight: 600,
+  fontSize: 11,
+  cursor: "pointer",
+  textDecoration: "none",
+  whiteSpace: "nowrap" as const,
 };
