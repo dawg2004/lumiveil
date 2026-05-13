@@ -18,11 +18,14 @@ function isVideoHistoryUrl(url: string) {
   return cleanUrl.endsWith(".mp4") || cleanUrl.endsWith(".webm") || cleanUrl.endsWith(".mov");
 }
 
+const FAL_CREDIT_THRESHOLD = 2;
+
 export default function AdminPage() {
   const [items, setItems] = useState<AdminHistoryItem[]>([]);
   const [limit, setLimit] = useState(100);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  const [falBalance, setFalBalance] = useState<number | null>(null);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -44,9 +47,22 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadFalCredits = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/fal-credits");
+      const data = await res.json();
+      if (res.ok && typeof data.balance === "number") {
+        setFalBalance(data.balance);
+      }
+    } catch {
+      // non-critical — silently ignore
+    }
+  }, []);
+
   useEffect(() => {
     void loadHistory();
-  }, [loadHistory]);
+    void loadFalCredits();
+  }, [loadHistory, loadFalCredits]);
 
   return (
     <main style={{ minHeight: "100vh", background: "#071e28", color: "#f0ece4", fontFamily: "var(--font-lumiveil-sans)", padding: 18 }}>
@@ -65,6 +81,15 @@ export default function AdminPage() {
             </button>
           </div>
         </header>
+
+        {falBalance !== null && falBalance < FAL_CREDIT_THRESHOLD ? (
+          <div style={{ background: "#5c1a1a", border: "1px solid #b84242", borderRadius: 8, padding: "12px 16px", display: "flex", alignItems: "center", gap: 10, color: "#f8d7d7" }}>
+            <span style={{ fontSize: 18 }}>⚠️</span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              FAL APIクレジット残高が不足しています（残高: ${falBalance.toFixed(2)}）。チャージしてください。
+            </span>
+          </div>
+        ) : null}
 
         {status ? (
           <div style={{ ...panelStyle, color: status.includes("権限") || status.includes("ログイン") ? "#b84242" : "#171717" }}>
