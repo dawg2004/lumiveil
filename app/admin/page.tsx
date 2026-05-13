@@ -74,6 +74,20 @@ export default function AdminPage() {
             <p style={{ marginTop: 6, color: "#9ba8ae", fontSize: 13 }}>管理者は全ユーザーの生成画像・動画を最新{limit}件まで確認できます。</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {falBalance !== null && (
+              <div style={{
+                padding: "6px 12px",
+                borderRadius: 8,
+                background: falBalance < FAL_CREDIT_THRESHOLD ? "#5c1a1a" : "#0d2e1e",
+                border: `1px solid ${falBalance < FAL_CREDIT_THRESHOLD ? "#b84242" : "#2a7a4a"}`,
+                color: falBalance < FAL_CREDIT_THRESHOLD ? "#f8d7d7" : "#6ee7a0",
+                fontSize: 12,
+                fontWeight: 600,
+                whiteSpace: "nowrap" as const,
+              }}>
+                FAL ${falBalance.toFixed(2)}
+              </div>
+            )}
             <a href="/admin/accounts" style={smallButtonStyle}>アカウント管理</a>
             <a href="/" style={smallButtonStyle}>アプリへ戻る</a>
             <button onClick={() => void loadHistory()} disabled={loading} style={smallButtonStyle}>
