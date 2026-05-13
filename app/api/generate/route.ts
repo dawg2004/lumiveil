@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "imageUrlとpromptは必須です" }, { status: 400 });
     }
 
-    const { data: shop } = await supabase
+    const { data: shop } = await getAdminClient()
       .from("shops")
       .select("id")
       .eq("user_id", user.id)

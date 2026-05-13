@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: shop } = await supabase
+  const { data: shop } = await getAdminClient()
     .from("shops")
     .select("credits, plan")
     .eq("user_id", user.id)

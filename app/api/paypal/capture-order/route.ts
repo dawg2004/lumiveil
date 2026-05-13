@@ -24,7 +24,7 @@ async function getAuthenticatedUser(req: NextRequest) {
 }
 
 async function isAlreadyProcessed(orderId: string) {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from("credit_transactions")
     .select("id")
     .eq("stripe_id", `paypal:${orderId}`)
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (await isAlreadyProcessed(orderId)) {
-      const { data: shop } = await supabase
+      const { data: shop } = await getAdminClient()
         .from("shops")
         .select("credits")
         .eq("user_id", user.id)
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "PayPal注文情報が一致しません" }, { status: 400 });
     }
 
-    const { data: shop } = await supabase
+    const { data: shop } = await getAdminClient()
       .from("shops")
       .select("id, credits")
       .eq("user_id", user.id)
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, credits: nextCredits });
     }
 
-    const { data: newShop } = await supabase
+    const { data: newShop } = await getAdminClient()
       .from("shops")
       .insert({ user_id: user.id, name: "新規店舗", plan: "free", credits: pack.credits })
       .select("id")

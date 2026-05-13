@@ -24,14 +24,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "キャスト名と写真は必須です" }, { status: 400 });
     }
 
-    const { data: shopData } = await supabase
+    const { data: shopData } = await getAdminClient()
       .from("shops").select("id, credits").eq("user_id", user.id).single();
 
     if (!shopData || shopData.credits < 50) {
       return NextResponse.json({ error: "クレジットが不足しています（アバター作成：50クレジット）" }, { status: 402 });
     }
 
-    const { count: avatarCount, error: countError } = await supabase
+    const { count: avatarCount, error: countError } = await getAdminClient()
       .from("avatars")
       .select("id", { count: "exact", head: true })
       .eq("shop_id", shopData.id);
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const { data: avatarData, error: insertError } = await supabase
+    const { data: avatarData, error: insertError } = await getAdminClient()
       .from("avatars").insert({
         shop_id: shopData.id, name: castName,
         face_image_url: uploadedUrls[0], all_photo_urls: uploadedUrls, status: "ready",
@@ -80,14 +80,14 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await getAdminClient().auth.getUser(token!);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: shopData } = await supabase
+  const { data: shopData } = await getAdminClient()
     .from("shops").select("id").eq("user_id", user.id).single();
 
   if (!shopData?.id) {
     return NextResponse.json({ avatars: [], maxAvatars: MAX_AVATARS_PER_SHOP });
   }
 
-  const { data: avatars } = await supabase
+  const { data: avatars } = await getAdminClient()
     .from("avatars").select("id, name, face_image_url, created_at, status")
     .eq("shop_id", shopData.id)
     .order("created_at", { ascending: false })

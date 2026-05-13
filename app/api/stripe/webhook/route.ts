@@ -15,7 +15,7 @@ const PLAN_CREDITS: Record<string, number> = {
 };
 
 async function isAlreadyProcessed(stripeId: string): Promise<boolean> {
-  const { data } = await supabase
+  const { data } = await getAdminClient()
     .from("credit_transactions")
     .select("id")
     .eq("stripe_id", stripeId)
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
         if (await isAlreadyProcessed(session.id)) break;
 
-        const { data: shop } = await supabase
+        const { data: shop } = await getAdminClient()
           .from("shops").select("id, credits").eq("user_id", userId).single();
 
         if (shop) {
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
 
       const credits = PLAN_CREDITS[plan] || 0;
 
-      const { data: shop } = await supabase
+      const { data: shop } = await getAdminClient()
         .from("shops").select("id").eq("user_id", userId).single();
 
       if (shop) {
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       if (!userId || !plan) break;
 
       const credits = PLAN_CREDITS[plan] || 0;
-      const { data: shop } = await supabase
+      const { data: shop } = await getAdminClient()
         .from("shops").select("id").eq("user_id", userId).single();
 
       if (shop) {

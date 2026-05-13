@@ -35,13 +35,13 @@ export async function POST(req: NextRequest) {
     }
 
     const transactionId = `invite:${TRIAL_INVITE_CODE}:${user.id}`;
-    const { data: existingTransaction } = await supabase
+    const { data: existingTransaction } = await getAdminClient()
       .from("credit_transactions")
       .select("id")
       .eq("stripe_id", transactionId)
       .maybeSingle();
 
-    const { data: shop } = await supabase
+    const { data: shop } = await getAdminClient()
       .from("shops")
       .select("id, credits")
       .eq("user_id", user.id)
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, credits: nextCredits });
     }
 
-    const { data: newShop } = await supabase
+    const { data: newShop } = await getAdminClient()
       .from("shops")
       .insert({ user_id: user.id, name: "新規店舗", plan: "free", credits: TRIAL_FREE_CREDITS })
       .select("id")
