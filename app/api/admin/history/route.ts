@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { ADMIN_PANEL_COOKIE_NAME, isValidAdminPanelSessionToken } from "@/lib/admin-auth";
 
 function getAdminClient() {
   return createClient(
@@ -19,18 +20,25 @@ function getAdminEmails() {
     .filter(Boolean);
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const cookieSupabase = await createServerSupabaseClient();
-    const { data: { user } } = await cookieSupabase.auth.getUser();
-    const email = user?.email?.toLowerCase();
+    // admin panel cookie による認証
+    const token = req.cookies.get(ADMIN_PANEL_COOKIE_NAME)?.value;
+    const validCookie = await isValidAdminPanelSessionToken(token);
 
-    if (!email) {
-      return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
-    }
+    if (!validCookie) {
+      // Supabase セッションによるフォールバック
+      const cookieSupabase = await createServerSupabaseClient();
+      const { data: { user } } = await cookieSupabase.auth.getUser();
+      const email = user?.email?.toLowerCase();
 
-    if (!getAdminEmails().includes(email)) {
-      return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
+      if (!email) {
+        return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+      }
+
+      if (!getAdminEmails().includes(email)) {
+        return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
+      }
     }
 
     const { data, error } = await getAdminClient()

@@ -10,8 +10,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // 管理者セッションAPIはそのまま通す（独自認証）
-  if (pathname.startsWith('/api/admin/session')) {
+  // 管理者APIはそのまま通す（独自認証）
+  if (pathname.startsWith('/api/admin/')) {
     return NextResponse.next()
   }
 
