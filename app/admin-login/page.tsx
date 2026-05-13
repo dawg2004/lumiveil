@@ -9,9 +9,10 @@ export default function AdminLoginPage() {
     return params.get("next") || "/admin";
   }, []);
 
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState("通常ログイン済みの管理者のみ、追加パスワードで管理画面に入れます。");
+  const [status, setStatus] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -41,7 +42,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -60,11 +61,26 @@ export default function AdminLoginPage() {
       <div style={{ width: "min(460px, 100%)", background: "#d0cabd", borderRadius: 12, border: "1px solid #9f9686", padding: 20, color: "#171717", boxShadow: "0 10px 30px rgba(0,0,0,0.18)" }}>
         <div style={{ color: "#6a6258", fontSize: 11, letterSpacing: "0.08em", fontWeight: 700, marginBottom: 8 }}>LUMIVEIL ADMIN</div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>管理画面ロック解除</h1>
-        <p style={{ marginTop: 10, marginBottom: 18, color: "#4e4a43", fontSize: 13, lineHeight: 1.7 }}>
-          通常ログインとは別に、管理画面専用パスワードを入力してください。
-        </p>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 18 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 600 }}>
+            管理者メールアドレス
+            <input
+              type="email"
+              value={email}
+              onChange={event => setEmail(event.target.value)}
+              placeholder="admin@example.com"
+              style={{
+                width: "100%",
+                borderRadius: 10,
+                border: "1px solid #a89e8e",
+                background: "#f5f1e7",
+                color: "#111",
+                padding: "12px 14px",
+                fontSize: 14,
+              }}
+            />
+          </label>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 600 }}>
             管理画面パスワード
             <input
@@ -86,7 +102,7 @@ export default function AdminLoginPage() {
 
           <button
             type="submit"
-            disabled={loading || !password}
+            disabled={loading || !email || !password}
             style={{
               padding: "12px 14px",
               borderRadius: 10,
