@@ -27,16 +27,29 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "FAL_API_KEY が設定されていません" }, { status: 500 });
     }
 
-    const res = await fetch("https://fal.ai/api/billing/account", {
+    const res = await fetch("https://api.fal.ai/v1/account/billing?expand=credits", {
       headers: { Authorization: `Key ${FAL_KEY}` },
+      next: { revalidate: 300 },
     });
 
     if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error("fal billing API error", res.status, text);
       return NextResponse.json({ error: `FAL API error: ${res.status}` }, { status: 502 });
     }
 
-    const data = await res.json() as { balance?: number; currency?: string };
-    const balance = typeof data.balance === "number" ? data.balance : null;
+    const data = await res.json() as {
+      balance?: number;
+      currency?: string;
+      credits?: { balance?: number; remaining?: number };
+    };
+
+    // Try top-level balance first, then nested credits object
+    const balance =
+      typeof data.balance === "number" ? data.balance :
+      typeof data.credits?.balance === "number" ? data.credits.balance :
+      typeof data.credits?.remaining === "number" ? data.credits.remaining :
+      null;
 
     return NextResponse.json({ balance, currency: data.currency ?? "USD" });
   } catch (error) {
