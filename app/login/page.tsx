@@ -149,6 +149,15 @@ export default function LoginPage() {
             {isSignUp ? 'すでにアカウントをお持ちの方はこちら' : 'アカウントをお持ちでない方はこちら'}
           </button>
         </div>
+
+        <div style={{ textAlign: 'center', marginTop: '32px', borderTop: '1px solid #1e293b', paddingTop: '20px' }}>
+          <a
+            href="/admin-login"
+            style={{ color: '#475569', fontSize: '11px', textDecoration: 'none' }}
+          >
+            管理者用ログイン
+          </a>
+        </div>
       </div>
     </div>
   )
