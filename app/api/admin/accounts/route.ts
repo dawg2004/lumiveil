@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { ADMIN_PANEL_COOKIE_NAME, isValidAdminPanelSessionToken } from "@/lib/admin-auth";
 
 function getAdminClient() {
   return createClient(
@@ -33,7 +34,14 @@ function getAdminEmails() {
     .filter(Boolean);
 }
 
-async function requireAdmin(): Promise<AdminAuthResult> {
+async function requireAdmin(req: NextRequest): Promise<AdminAuthResult> {
+  // admin panel cookie による認証
+  const token = req.cookies.get(ADMIN_PANEL_COOKIE_NAME)?.value;
+  if (await isValidAdminPanelSessionToken(token)) {
+    return { ok: true, email: "admin" };
+  }
+
+  // Supabase セッションによるフォールバック
   const cookieSupabase = await createServerSupabaseClient();
   const { data: { user } } = await cookieSupabase.auth.getUser();
   const email = user?.email?.toLowerCase();
@@ -118,9 +126,9 @@ async function ensureShopForUser(userId: string, email: string) {
   return created as ShopRecord;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (!auth.ok) {
       return auth.response;
     }
@@ -140,7 +148,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (!auth.ok) {
       return auth.response;
     }
