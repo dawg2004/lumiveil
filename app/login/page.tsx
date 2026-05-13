@@ -150,10 +150,10 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '32px', borderTop: '1px solid #1e293b', paddingTop: '20px' }}>
+        <div style={{ textAlign: 'center', marginTop: '32px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
           <a
             href="/admin-login"
-            style={{ color: '#475569', fontSize: '11px', textDecoration: 'none' }}
+            style={{ color: '#94a3b8', fontSize: '12px', textDecoration: 'none' }}
           >
             管理者用ログイン
           </a>
