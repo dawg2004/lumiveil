@@ -764,21 +764,6 @@ export default function Home() {
 
       setEditResult(data.url);
       lastSavedEditResultRef.current = data.url;
-      try {
-        const token = await getAuthToken();
-        if (token) {
-          await fetch("/api/history", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              prompt: `AI編集: ${editPrompt}`,
-              generated_image_url: data.url,
-              media_type: "image",
-              credits_used: 1,
-            }),
-          });
-        }
-      } catch (e) { /* ignore */ }
       void loadHistory();
       setEditStatus("編集が完了しました。");
     } catch (error) {
@@ -840,21 +825,6 @@ export default function Home() {
           setVideoRequestId(null);
           setVideoResult(data.videoUrl);
           lastSavedVideoResultRef.current = data.videoUrl;
-          try {
-            const token = await getAuthToken();
-            if (token) {
-              await fetch("/api/history", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                  prompt: `${videoModel === "seedance" ? "Seedance動画" : "Grok動画"}: ${videoPrompt}`,
-                  generated_image_url: data.videoUrl,
-                  media_type: "video",
-                  credits_used: videoModel === "seedance" ? Math.max(1, Math.round(videoDuration * 2)) : Math.max(1, Math.round(videoDuration * (videoResolution === "480p" ? 1 : 2))),
-                }),
-              });
-            }
-          } catch (e) { /* ignore */ }
           void loadHistory();
           setVideoLoading(false);
           setVideoStatus("完成！");
@@ -887,7 +857,7 @@ export default function Home() {
     void pollVideoStatus();
     videoPollRef.current = setInterval(() => void pollVideoStatus(), 5000);
     return () => { if (videoPollRef.current) clearInterval(videoPollRef.current); };
-  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory, getAuthToken]);
+  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory]);
 
   useEffect(() => {
     if (tab === "avatar" || tab === "mosaic" || tab === "video") {
@@ -1220,9 +1190,30 @@ export default function Home() {
                     color: historyStatus.includes("ログイン") || historyStatus.includes("取得できません") ? "#b84242" : "#6f5310",
                     fontSize: 12,
                     fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                   }}
                 >
-                  {historyStatus}
+                  <span style={{ flex: 1 }}>{historyStatus}</span>
+                  {historyStatus.includes("ログイン状態を確認できませんでした") && (
+                    <a
+                      href="/login"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #b84242",
+                        background: "rgba(184,66,66,0.12)",
+                        color: "#b84242",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      再ログイン
+                    </a>
+                  )}
                 </div>
               ) : null}
 

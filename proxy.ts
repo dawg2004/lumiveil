@@ -1,12 +1,38 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ADMIN_PANEL_COOKIE_NAME, isValidAdminPanelSessionToken } from "@/lib/admin-auth";
 
 export async function proxy(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
+
   // Stripe webhookはそのまま通す
-  if (request.nextUrl.pathname.startsWith('/api/stripe/webhook')) {
+  if (pathname.startsWith('/api/stripe/webhook')) {
     return NextResponse.next()
   }
 
+  // Admin routes: admin panel session cookie で認証
+  if (pathname.startsWith('/admin')) {
+    const token = request.cookies.get(ADMIN_PANEL_COOKIE_NAME)?.value;
+    const isValid = await isValidAdminPanelSessionToken(token);
+    if (!isValid) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/admin-login';
+      url.search = '';
+      const nextValue = `${pathname}${search}`;
+      if (nextValue && nextValue !== '/') {
+        url.searchParams.set('next', nextValue);
+      }
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
+  // /login, /admin-login はそのまま通す
+  if (pathname.startsWith('/login') || pathname.startsWith('/admin-login')) {
+    return NextResponse.next();
+  }
+
+  // その他のルート: Supabase セッションのリフレッシュと認証チェック
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -30,7 +56,7 @@ export async function proxy(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user && !request.nextUrl.pathname.startsWith('/login')) {
+  if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     const redirect = NextResponse.redirect(url)
