@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { uploadToStorage } from "@/lib/upload-to-storage";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -204,10 +205,18 @@ export async function GET(req: NextRequest) {
     if (statusData.status === "COMPLETED") {
       const result = await fal.queue.result(modelId, { requestId });
       const resultData = result.data as { video?: { url?: string } };
-      const videoUrl = resultData.video?.url;
-      if (!videoUrl) {
+      const falVideoUrl = resultData.video?.url;
+      if (!falVideoUrl) {
         throw new Error("result video url is missing");
       }
+
+      let videoUrl = falVideoUrl;
+      try {
+        videoUrl = await uploadToStorage(falVideoUrl, "video");
+      } catch (err) {
+        console.error("Video storage upload failed, using fal URL:", err);
+      }
+
       const { user } = await getAuthenticatedContext(req);
       if (user) {
         const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
