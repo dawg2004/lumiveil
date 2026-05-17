@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { uploadToStorage } from "@/lib/upload-to-storage";
 
 export const runtime = "nodejs";
 
@@ -222,9 +223,16 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    const url = data.images?.[0]?.url;
-    if (!url) {
+    const falUrl = data.images?.[0]?.url;
+    if (!falUrl) {
       throw new Error("URL not found");
+    }
+
+    let url = falUrl;
+    try {
+      url = await uploadToStorage(falUrl, "image");
+    } catch (err) {
+      console.error("Edit storage upload failed, using fal URL:", err);
     }
 
     const adminClient = createAdminSupabaseClient();
