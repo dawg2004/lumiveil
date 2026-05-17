@@ -1155,7 +1155,10 @@ export default function Home() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <div style={sectionLabelStyle}>生成履歴</div>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: "#171717", marginBottom: 6 }}>生成した画像・動画</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                      <div style={{ fontSize: 20, fontWeight: 500, color: "#171717" }}>生成した画像・動画</div>
+                      <div style={{ fontSize: 11, color: "#9b8c5a" }}>※ 動画は約1時間で失効します</div>
+                    </div>
                     <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
                       アカウントに紐づいた画像・動画生成の結果を新しい順に最大50件まで表示します。
                     </div>
