@@ -182,6 +182,7 @@ export default function Home() {
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDeleting, setHistoryDeleting] = useState(false);
+  const [historyDownloadingId, setHistoryDownloadingId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1310,13 +1311,24 @@ export default function Home() {
                           <span style={{ fontSize: 11, color: "#6a6258" }}>
                             {item.credits_used ?? 1} credit
                           </span>
-                          <a
-                            href={item.generated_image_url}
-                            download
-                            style={{ ...smallButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", pointerEvents: hasMedia ? "auto" : "none", opacity: hasMedia ? 1 : 0.5 }}
+                          <button
+                            disabled={!hasMedia || historyDownloadingId === item.id}
+                            onClick={async () => {
+                              if (!hasMedia || historyDownloadingId) return;
+                              setHistoryDownloadingId(item.id);
+                              const fallback = isVideo ? "video.mp4" : "image.jpg";
+                              try {
+                                await saveFileAs(item.generated_image_url, null, fallback);
+                              } catch {
+                                // ignore user cancel
+                              } finally {
+                                setHistoryDownloadingId(null);
+                              }
+                            }}
+                            style={{ ...smallButtonStyle, opacity: hasMedia ? 1 : 0.5, cursor: hasMedia ? "pointer" : "not-allowed" }}
                           >
-                            保存
-                          </a>
+                            {historyDownloadingId === item.id ? "保存中..." : "保存"}
+                          </button>
                         </div>
                       </div>
                     </div>
