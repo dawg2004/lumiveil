@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 
 const navItems = ["HOME", "EVENTS", "ARTICLES", "VIDEOS", "PHOTOS", "ABOUT"];
+const navHref: Record<string, string> = {
+  HOME: "/",
+  EVENTS: "/events",
+  ARTICLES: "/articles",
+  VIDEOS: "#",
+  PHOTOS: "#",
+  ABOUT: "#",
+};
 
 export function Header({ active = "HOME" }: { active?: string }) {
   const [open, setOpen] = useState(false);
@@ -19,7 +27,7 @@ export function Header({ active = "HOME" }: { active?: string }) {
           {navItems.map((item) => (
             <Link
               key={item}
-              href={item === "HOME" ? "/" : item === "EVENTS" ? "/events" : "#"}
+              href={navHref[item]}
               className={`pb-1 transition hover:text-stone-950 ${active === item ? "border-b border-stone-950 text-stone-950" : ""}`}
             >
               {item}
@@ -67,7 +75,7 @@ export function Header({ active = "HOME" }: { active?: string }) {
               {navItems.map((item, index) => (
                 <Link
                   key={item}
-                  href={item === "HOME" ? "/" : item === "EVENTS" ? "/events" : "#"}
+                  href={navHref[item]}
                   onClick={() => setOpen(false)}
                   style={{ animationDelay: `${180 + index * 58}ms` }}
                   className={`menu-item-reveal border-b border-stone-200 px-1 py-4 text-sm font-semibold tracking-[0.18em] transition hover:pl-3 last:border-b-0 ${

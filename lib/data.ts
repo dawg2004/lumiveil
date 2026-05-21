@@ -177,6 +177,15 @@ export function getEventBySlug(slug: string) {
   return events.find((event) => event.slug === slug);
 }
 
+export function getArticleBySlug(slug: string) {
+  return articles.find((article) => article.slug === slug);
+}
+
+export function getEventByArticleSlug(slug: string) {
+  const eventSlug = slug.endsWith("-report") ? slug.slice(0, -"-report".length) : slug;
+  return getEventBySlug(eventSlug);
+}
+
 export function formatEventDate(date: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${date}T00:00:00`));
 }
