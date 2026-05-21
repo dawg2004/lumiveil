@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function proxy(request: NextRequest) {
-  const publicPaths = ['/', '/events', '/articles', '/admin', '/login']
+  const publicPaths = ['/', '/events', '/articles', '/videos', '/admin', '/login']
   const isPublicPath = publicPaths.some((path) => (
     path === '/'
       ? request.nextUrl.pathname === '/'

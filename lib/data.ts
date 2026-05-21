@@ -163,7 +163,12 @@ export const videos: VideoItem[] = events
   .filter((event) => event.youtubeUrl)
   .map((event, index) => ({
     id: `vid-00${index + 1}`,
+    slug: `${event.slug}-video`,
     title: event.title,
+    date: event.date,
+    category: event.category,
+    location: event.location,
+    description: event.description,
     duration: index === 0 ? "12:48" : "08:24",
     thumbnail: event.image,
     youtubeUrl: event.youtubeUrl ?? "",
@@ -183,6 +188,11 @@ export function getArticleBySlug(slug: string) {
 
 export function getEventByArticleSlug(slug: string) {
   const eventSlug = slug.endsWith("-report") ? slug.slice(0, -"-report".length) : slug;
+  return getEventBySlug(eventSlug);
+}
+
+export function getEventByVideoSlug(slug: string) {
+  const eventSlug = slug.endsWith("-video") ? slug.slice(0, -"-video".length) : slug;
   return getEventBySlug(eventSlug);
 }
 

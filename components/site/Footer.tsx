@@ -3,7 +3,7 @@ import Link from "next/link";
 const footerLinks = [
   { label: "イベント", href: "/events" },
   { label: "アーカイブ", href: "/articles" },
-  { label: "配信動画", href: "#" },
+  { label: "配信動画", href: "/videos" },
   { label: "参加者用アーカイブ", href: "#" },
 ];
 

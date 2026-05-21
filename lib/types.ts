@@ -40,7 +40,12 @@ export type ArticleItem = {
 
 export type VideoItem = {
   id: string;
+  slug: string;
   title: string;
+  date: string;
+  category: string;
+  location: string;
+  description: string;
   duration: string;
   thumbnail: string;
   youtubeUrl: string;
