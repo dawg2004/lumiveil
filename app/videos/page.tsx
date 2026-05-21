@@ -1,15 +1,16 @@
+import { cookies } from "next/headers";
 import { VideoEmbedCard } from "@/components/videos/VideoEmbedCard";
 import { Footer } from "@/components/site/Footer";
 import { Header } from "@/components/site/Header";
 import { formatEventDate, videos } from "@/lib/data";
+import { VIDEO_ACCESS_COOKIE } from "@/lib/video-access";
 
-export default function VideosPage() {
+function VideosArchive() {
   const featuredVideo = videos[0];
   const secondaryVideos = videos.slice(1);
 
   return (
-    <main className="min-h-screen bg-[#f7f5ef] text-stone-950">
-      <Header active="VIDEOS" />
+    <>
       <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-end">
           <div>
@@ -55,6 +56,53 @@ export default function VideosPage() {
           ) : null}
         </div>
       </section>
+    </>
+  );
+}
+
+function VideoAccessGate({ hasError }: { hasError: boolean }) {
+  return (
+    <section className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+      <div className="border border-stone-200 bg-white p-8 sm:p-10">
+        <p className="text-xs font-semibold tracking-[0.22em] text-stone-500">PRIVATE VIDEO ARCHIVE</p>
+        <h1 className="mt-3 font-serif text-5xl leading-none text-stone-950">視聴パスワード</h1>
+        <p className="mt-5 max-w-xl text-base leading-8 text-stone-600">
+          このページは参加者向けの限定アーカイブです。共有されているパスワードを入力すると、埋め込み動画ページへ進めます。
+        </p>
+        <form action="/videos/access" method="post" className="mt-8 grid gap-4 sm:max-w-md">
+          <input
+            type="password"
+            name="password"
+            placeholder="パスワードを入力"
+            aria-label="動画ページのパスワード"
+            className="h-12 border border-stone-300 bg-[#fbfaf7] px-4 text-sm text-stone-950 outline-none transition focus:border-stone-950"
+            required
+          />
+          <button className="h-12 bg-stone-950 px-5 text-xs font-semibold tracking-[0.18em] text-white transition hover:bg-stone-800">
+            ENTER VIDEO PAGE
+          </button>
+          {hasError ? (
+            <p className="text-sm text-red-600">パスワードが違います。もう一度確認してください。</p>
+          ) : null}
+        </form>
+      </div>
+    </section>
+  );
+}
+
+export default async function VideosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const cookieStore = await cookies();
+  const params = await searchParams;
+  const hasAccess = cookieStore.get(VIDEO_ACCESS_COOKIE)?.value === "granted";
+
+  return (
+    <main className="min-h-screen bg-[#f7f5ef] text-stone-950">
+      <Header active="VIDEOS" />
+      {hasAccess ? <VideosArchive /> : <VideoAccessGate hasError={params.error === "1"} />}
       <Footer />
     </main>
   );

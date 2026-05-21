@@ -23,6 +23,7 @@ npm run build
 - `/articles` - Article archive with featured report, latest notes, and report grid.
 - `/articles/[slug]` - Article detail page linked to the related studio event.
 - `/videos` - YouTube-focused video archive with embedded sessions and links back to events.
+- `/videos` はパスワード保護付き。`VIDEO_ARCHIVE_PASSWORD` が未設定の場合は一時的に `goodtime-video` を使用。
 - `/events` - Event archive with category controls, year/month/sort UI, sidebar filters, cards, and pagination.
 - `/events/fermentation-workshop` - Event detail page with hero, YouTube embed, report body, gallery, host, event sidebar, and related events.
 - `/admin` - CMS-style dashboard shell with stats, recent activity, quick links, and event management table.
