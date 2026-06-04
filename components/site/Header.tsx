@@ -38,9 +38,12 @@ export function Header({ active = "HOME" }: { active?: string }) {
           <button aria-label="Search" className="grid size-10 place-items-center rounded-full border border-stone-300 text-sm transition hover:bg-white">
             S
           </button>
-          <button className="rounded-none bg-stone-950 px-5 py-3 text-[11px] font-semibold tracking-[0.16em] text-white transition hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-950">
-            SUBMIT EVENT
-          </button>
+          <Link
+            href="/admin"
+            className="rounded-none bg-stone-950 px-5 py-3 text-[6px] font-semibold tracking-[0.16em] text-white transition hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-950"
+          >
+            ADMIN
+          </Link>
         </div>
         <button
           aria-label={open ? "Close menu" : "Open menu"}
@@ -90,9 +93,9 @@ export function Header({ active = "HOME" }: { active?: string }) {
               <button aria-label="Search" className="h-11 border border-stone-300 text-xs font-semibold tracking-[0.16em]">
                 SEARCH
               </button>
-              <button className="h-11 bg-stone-950 text-xs font-semibold tracking-[0.16em] text-white">
-                SUBMIT EVENT
-              </button>
+              <Link href="/admin" onClick={() => setOpen(false)} className="grid h-11 place-items-center bg-stone-950 text-[10px] font-semibold tracking-[0.16em] text-white">
+                ADMIN
+              </Link>
             </div>
           </div>
         </div>
