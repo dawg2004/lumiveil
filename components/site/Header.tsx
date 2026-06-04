@@ -35,9 +35,6 @@ export function Header({ active = "HOME" }: { active?: string }) {
           ))}
         </nav>
         <div className="hidden items-center gap-3 lg:flex">
-          <button aria-label="Search" className="grid size-10 place-items-center rounded-full border border-stone-300 text-sm transition hover:bg-white">
-            S
-          </button>
           <Link
             href="/admin"
             className="rounded-none bg-stone-950 px-5 py-3 text-[6px] font-semibold tracking-[0.16em] text-white transition hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-950"
@@ -90,9 +87,6 @@ export function Header({ active = "HOME" }: { active?: string }) {
               ))}
             </nav>
             <div className="mt-6 grid gap-3">
-              <button aria-label="Search" className="h-11 border border-stone-300 text-xs font-semibold tracking-[0.16em]">
-                SEARCH
-              </button>
               <Link href="/admin" onClick={() => setOpen(false)} className="grid h-11 place-items-center bg-stone-950 text-[10px] font-semibold tracking-[0.16em] text-white">
                 ADMIN
               </Link>
