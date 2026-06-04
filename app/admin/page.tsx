@@ -54,7 +54,7 @@ function AdminAccessGate({ hasError, nextPath }: { hasError: boolean; nextPath: 
     <main className="min-h-screen bg-[#f3efe6] px-4 py-16 text-stone-950 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl border border-stone-200 bg-white p-8 sm:p-10">
         <p className="text-xs font-semibold tracking-[0.22em] text-stone-500">PRIVATE ADMIN ACCESS</p>
-        <h1 className="mt-3 font-serif text-5xl leading-none text-stone-950">管理ページのパスワード</h1>
+        <h1 className="mt-3 font-serif text-2xl leading-tight text-stone-950 sm:text-3xl">管理ページのパスワード</h1>
         <p className="mt-5 max-w-2xl text-base leading-8 text-stone-600">
           このページは管理用です。共有パスワードを入力すると、記事編集やイベント管理画面に入れます。
         </p>
