@@ -35,7 +35,7 @@ function VideosArchive() {
 
       <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
         <div className="grid gap-8">
-          <VideoEmbedCard video={featuredVideo} priority />
+          <VideoEmbedCard video={featuredVideo} priority size="featured" />
           {secondaryVideos.length ? (
             <>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

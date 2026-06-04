@@ -2,11 +2,20 @@ import Link from "next/link";
 import { formatEventDate, getEventByVideoSlug } from "@/lib/data";
 import type { VideoItem } from "@/lib/types";
 
-export function VideoEmbedCard({ video, priority = false }: { video: VideoItem; priority?: boolean }) {
+export function VideoEmbedCard({
+  video,
+  priority = false,
+  size = "standard",
+}: {
+  video: VideoItem;
+  priority?: boolean;
+  size?: "featured" | "standard";
+}) {
   const event = getEventByVideoSlug(video.slug);
+  const widthClass = size === "featured" ? "max-w-3xl" : "max-w-xl";
 
   return (
-    <article className="overflow-hidden border border-stone-200 bg-white">
+    <article className={`mx-auto w-full overflow-hidden border border-stone-200 bg-white ${widthClass}`}>
       <div className="aspect-video bg-stone-950">
         <iframe
           src={video.youtubeUrl}

@@ -176,7 +176,7 @@ export const videos: VideoItem[] = events
 
 export const categories: EventCategory[] = ["Workshop", "Music", "Talk", "Photo Walk", "Cooking", "Exhibition"];
 
-export const partners = ["LA MARZOCCO", "Aesop.", "creative allies", "OLYMPUS", "NOTION PRESS", "GOOD HOOD", "P&Co"];
+export const partners = ["GOOD HOOD", "WORKSHOP", "EAT", "FOOD PHOTO", "TOWN COMMUNITY", "YOYOGIUEHAR"];
 
 export function getEventBySlug(slug: string) {
   return events.find((event) => event.slug === slug);
