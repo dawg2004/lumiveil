@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 type ShopRecord = {
   id: string;
   user_id: string;
@@ -29,6 +24,17 @@ function getAdminEmails() {
     .split(",")
     .map(email => email.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error("Supabase admin environment variables are not configured");
+  }
+
+  return createClient(url, serviceRoleKey);
 }
 
 async function requireAdmin(): Promise<AdminAuthResult> {
@@ -54,6 +60,7 @@ async function requireAdmin(): Promise<AdminAuthResult> {
 }
 
 async function fetchAccounts() {
+  const supabase = getAdminSupabase();
   const [{ data: usersData, error: usersError }, { data: shops, error: shopsError }] = await Promise.all([
     supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
     supabase
@@ -83,6 +90,7 @@ async function fetchAccounts() {
 }
 
 async function ensureShopForUser(userId: string, email: string) {
+  const supabase = getAdminSupabase();
   const { data: existing, error: existingError } = await supabase
     .from("shops")
     .select("id, user_id, name, plan, credits, created_at")
@@ -173,6 +181,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (Object.keys(updates).length > 0) {
+      const supabase = getAdminSupabase();
       const { error: updateError } = await supabase
         .from("shops")
         .update(updates)

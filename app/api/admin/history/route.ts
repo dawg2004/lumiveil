@@ -2,11 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const ADMIN_HISTORY_LIMIT = 100;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
@@ -15,6 +10,17 @@ function getAdminEmails() {
     .split(",")
     .map(email => email.trim().toLowerCase())
     .filter(Boolean);
+}
+
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !serviceRoleKey) {
+    throw new Error("Supabase admin environment variables are not configured");
+  }
+
+  return createClient(url, serviceRoleKey);
 }
 
 export async function GET() {
@@ -31,6 +37,7 @@ export async function GET() {
       return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
     }
 
+    const supabase = getAdminSupabase();
     const { data, error } = await supabase
       .from("generation_history")
       .select("id, shop_id, avatar_id, prompt, credits_used, created_at")
