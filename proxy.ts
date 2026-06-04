@@ -1,7 +1,20 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ADMIN_ACCESS_COOKIE } from '@/lib/admin-access'
 
 export async function proxy(request: NextRequest) {
+  const isAdminPage = request.nextUrl.pathname === '/admin' || request.nextUrl.pathname.startsWith('/admin/')
+  const isAdminAccessRoute = request.nextUrl.pathname === '/admin/access'
+  const hasAdminAccess = request.cookies.get(ADMIN_ACCESS_COOKIE)?.value === 'granted'
+
+  if (isAdminPage && !isAdminAccessRoute && !hasAdminAccess && request.nextUrl.pathname !== '/admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/admin'
+    url.search = ''
+    url.searchParams.set('next', request.nextUrl.pathname)
+    return NextResponse.redirect(url)
+  }
+
   const publicPaths = ['/', '/events', '/articles', '/videos', '/admin', '/login']
   const isPublicPath = publicPaths.some((path) => (
     path === '/'
