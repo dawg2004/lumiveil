@@ -17,7 +17,7 @@ export function Footer() {
             <span className="block">ARCHIVE</span>
           </div>
           <p className="mt-5 max-w-sm text-sm leading-7 text-stone-400">
-            食、音楽、対話、ワークショップを通して生まれた出来事を、写真・記事・映像で記録するスタジオアーカイブ。
+            食、対話、ワークショップを通して生まれた出来事を、写真・記事・映像で記録するスタジオアーカイブ。
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
