@@ -38,18 +38,22 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const email = await getCurrentUserEmail();
+    const body = await req.json();
+    const password = typeof body.password === "string" ? body.password : "";
+    const adminPassword = process.env.ADMIN_PANEL_PASSWORD ?? "";
+
+    // メールアドレスはbodyから受け取るか、Supabaseセッションから取得
+    const bodyEmail = typeof body.email === "string" ? body.email.toLowerCase().trim() : "";
+    const sessionEmail = await getCurrentUserEmail();
+    const email = bodyEmail || sessionEmail;
+
     if (!email) {
-      return NextResponse.json({ error: "先に通常ログインしてください。" }, { status: 401 });
+      return NextResponse.json({ error: "メールアドレスを入力してください。" }, { status: 401 });
     }
 
     if (!getAdminEmails().includes(email)) {
       return NextResponse.json({ error: "管理者として許可されていないメールアドレスです。" }, { status: 403 });
     }
-
-    const body = await req.json();
-    const password = typeof body.password === "string" ? body.password : "";
-    const adminPassword = process.env.ADMIN_PANEL_PASSWORD ?? "";
 
     if (!adminPassword) {
       return NextResponse.json({ error: "ADMIN_PANEL_PASSWORD が未設定です。" }, { status: 500 });

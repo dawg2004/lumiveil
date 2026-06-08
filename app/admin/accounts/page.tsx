@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+type BlockedKeyword = {
+  id: string;
+  keyword: string;
+  reason: string | null;
+  created_at: string;
+};
+
 type AdminAccount = {
   id: string;
   email: string;
@@ -25,6 +32,12 @@ export default function AdminAccountsPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
+
+  const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
+  const [keywordsLoading, setKeywordsLoading] = useState(false);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newKeywordReason, setNewKeywordReason] = useState("");
+  const [keywordStatus, setKeywordStatus] = useState("");
 
   const totalCredits = useMemo(
     () => accounts.reduce((total, account) => total + Number(account.credits ?? 0), 0),
@@ -140,6 +153,60 @@ export default function AdminAccountsPage() {
     }
   }, [applyAccount, drafts, loadAccounts]);
 
+  const loadKeywords = useCallback(async () => {
+    setKeywordsLoading(true);
+    try {
+      const res = await fetch("/api/admin/blocked-keywords");
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "取得失敗");
+      setKeywords(data.keywords ?? []);
+    } catch (error) {
+      setKeywordStatus(error instanceof Error ? error.message : "取得失敗");
+    } finally {
+      setKeywordsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadKeywords(); }, [loadKeywords]);
+
+  const addKeyword = useCallback(async () => {
+    const kw = newKeyword.trim();
+    if (!kw) return;
+    setKeywordStatus("");
+    try {
+      const res = await fetch("/api/admin/blocked-keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: kw, reason: newKeywordReason.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "追加失敗");
+      setNewKeyword("");
+      setNewKeywordReason("");
+      setKeywordStatus("追加しました。");
+      await loadKeywords();
+    } catch (error) {
+      setKeywordStatus(error instanceof Error ? error.message : "追加失敗");
+    }
+  }, [loadKeywords, newKeyword, newKeywordReason]);
+
+  const deleteKeyword = useCallback(async (id: string) => {
+    setKeywordStatus("");
+    try {
+      const res = await fetch("/api/admin/blocked-keywords", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "削除失敗");
+      setKeywords(current => current.filter(kw => kw.id !== id));
+      setKeywordStatus("削除しました。");
+    } catch (error) {
+      setKeywordStatus(error instanceof Error ? error.message : "削除失敗");
+    }
+  }, []);
+
   return (
     <main style={{ minHeight: "100vh", background: "#071e28", color: "#f0ece4", fontFamily: "var(--font-lumiveil-sans)", padding: 18 }}>
       <div style={{ maxWidth: 1280, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -150,6 +217,7 @@ export default function AdminAccountsPage() {
             <p style={{ marginTop: 6, color: "#9ba8ae", fontSize: 13 }}>クレジット残高・プラン・ショップ名を直接編集できます。shops が無いユーザーは管理画面から作成できます。</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noreferrer" style={falLinkStyle}>FALクレジット確認</a>
             <a href="/admin" style={smallButtonStyle}>生成履歴</a>
             <a href="/" style={smallButtonStyle}>アプリへ戻る</a>
             <button onClick={() => void loadAccounts()} disabled={loading} style={smallButtonStyle}>
@@ -276,6 +344,72 @@ export default function AdminAccountsPage() {
         ) : (
           <div style={panelStyle}>登録アカウントはまだありません。</div>
         )}
+
+        <section style={{ ...panelStyle, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#111" }}>ブロックキーワード管理</div>
+            <button onClick={() => void loadKeywords()} disabled={keywordsLoading} style={smallButtonStyle}>
+              {keywordsLoading ? "更新中..." : "更新"}
+            </button>
+          </div>
+          <p style={{ fontSize: 12, color: "#6a6258", marginBottom: 12 }}>
+            ここに登録したキーワードは、ユーザーがプロンプトに入力した際に警告として表示されます。
+          </p>
+
+          {keywordStatus ? (
+            <div style={{ marginBottom: 12, fontSize: 12, padding: "8px 12px", borderRadius: 8, background: "rgba(0,0,0,0.06)", color: keywordStatus.includes("失敗") || keywordStatus.includes("登録済み") ? "#b84242" : "#2a7a4a" }}>
+              {keywordStatus}
+            </div>
+          ) : null}
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <input
+              type="text"
+              placeholder="キーワード（例: nude）"
+              value={newKeyword}
+              onChange={e => setNewKeyword(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") void addKeyword(); }}
+              style={{ ...inputStyle, flex: "1 1 160px" }}
+            />
+            <input
+              type="text"
+              placeholder="理由・メモ（任意）"
+              value={newKeywordReason}
+              onChange={e => setNewKeywordReason(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") void addKeyword(); }}
+              style={{ ...inputStyle, flex: "2 1 220px" }}
+            />
+            <button
+              onClick={() => void addKeyword()}
+              disabled={!newKeyword.trim()}
+              style={{ ...primaryActionButtonStyle, opacity: !newKeyword.trim() ? 0.5 : 1 }}
+            >
+              追加
+            </button>
+          </div>
+
+          {keywordsLoading ? (
+            <div style={{ fontSize: 12, color: "#6a6258" }}>読み込み中...</div>
+          ) : keywords.length === 0 ? (
+            <div style={{ fontSize: 12, color: "#6a6258" }}>登録済みキーワードはありません。</div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {keywords.map(kw => (
+                <div key={kw.id} style={{ display: "flex", alignItems: "center", gap: 6, background: "#ede3c8", border: "1px solid #c9a84c", borderRadius: 20, padding: "4px 10px 4px 12px" }}>
+                  <span style={{ fontSize: 12, color: "#111", fontWeight: 600 }}>{kw.keyword}</span>
+                  {kw.reason ? <span style={{ fontSize: 11, color: "#6a6258" }}>— {kw.reason}</span> : null}
+                  <button
+                    onClick={() => void deleteKeyword(kw.id)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "#b84242", fontWeight: 700, fontSize: 14, lineHeight: 1, padding: "0 2px" }}
+                    title="削除"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
@@ -297,6 +431,19 @@ const panelStyle = {
   padding: 14,
   border: "1px solid #9f9686",
   color: "#171717",
+};
+
+const falLinkStyle = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "#0d2e1e",
+  border: "1px solid #2a7a4a",
+  color: "#6ee7a0",
+  fontWeight: 600,
+  fontSize: 11,
+  cursor: "pointer",
+  textDecoration: "none",
+  whiteSpace: "nowrap" as const,
 };
 
 const smallButtonStyle = {

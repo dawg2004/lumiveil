@@ -10,6 +10,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // 管理者APIはそのまま通す（独自認証）
+  if (pathname.startsWith('/api/admin/')) {
+    return NextResponse.next()
+  }
+
   // /login, /admin-login はそのまま通す（/admin チェックより先に評価）
   if (pathname.startsWith('/login') || pathname.startsWith('/admin-login')) {
     return NextResponse.next();
