@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 const MAX_AVATARS_PER_SHOP = 200;
 
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 export async function POST(req: NextRequest) {
+  const supabase = getSupabase();
   try {
     const token = req.headers.get("authorization")?.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token!);
@@ -74,6 +77,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  const supabase = getSupabase();
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   const { data: { user } } = await supabase.auth.getUser(token!);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
