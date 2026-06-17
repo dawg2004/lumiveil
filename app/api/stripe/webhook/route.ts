@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const PLAN_CREDITS: Record<string, number> = {
   basic: 650, standard: 1600, mega: 4800,
 };
 
-async function isAlreadyProcessed(stripeId: string): Promise<boolean> {
+async function isAlreadyProcessed(supabase: SupabaseClient, stripeId: string): Promise<boolean> {
   const { data } = await supabase
     .from("credit_transactions")
     .select("id")
@@ -22,6 +26,9 @@ async function isAlreadyProcessed(stripeId: string): Promise<boolean> {
 }
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
+  const supabase = getSupabase();
+
   const body = await req.text();
   const sig = req.headers.get("stripe-signature")!;
 
@@ -42,7 +49,7 @@ export async function POST(req: NextRequest) {
         const packId = session.metadata.packId ?? "topup";
         if (!userId || !credits) break;
 
-        if (await isAlreadyProcessed(session.id)) break;
+        if (await isAlreadyProcessed(supabase, session.id)) break;
 
         const { data: shop } = await supabase
           .from("shops").select("id, credits").eq("user_id", userId).single();
@@ -75,7 +82,7 @@ export async function POST(req: NextRequest) {
       const plan = session.metadata?.plan;
       if (!userId || !plan) break;
 
-      if (await isAlreadyProcessed(session.id)) break;
+      if (await isAlreadyProcessed(supabase, session.id)) break;
 
       const credits = PLAN_CREDITS[plan] || 0;
 
@@ -100,12 +107,10 @@ export async function POST(req: NextRequest) {
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
 
-      // 初回購入はcheckout.session.completedで処理済みのためスキップ
       if (invoice.billing_reason === "subscription_create") break;
 
-      if (await isAlreadyProcessed(invoice.id!)) break;
+      if (await isAlreadyProcessed(supabase, invoice.id!)) break;
 
-      // サブスクリプションのメタデータからuserId/planを取得
       const subscriptionId =
         typeof (invoice as any).subscription === "string"
           ? (invoice as any).subscription

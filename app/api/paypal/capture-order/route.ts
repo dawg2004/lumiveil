@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { capturePayPalOrder } from "@/lib/paypal";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 async function getAuthenticatedUser(req: NextRequest) {
+  const supabase = getSupabase();
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (token) {
     const { data: { user } } = await supabase.auth.getUser(token);
@@ -21,7 +24,7 @@ async function getAuthenticatedUser(req: NextRequest) {
   return user;
 }
 
-async function isAlreadyProcessed(orderId: string) {
+async function isAlreadyProcessed(supabase: SupabaseClient, orderId: string) {
   const { data } = await supabase
     .from("credit_transactions")
     .select("id")
@@ -32,6 +35,7 @@ async function isAlreadyProcessed(orderId: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const supabase = getSupabase();
   try {
     const { orderId } = await req.json();
     if (!orderId) {
@@ -43,7 +47,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
     }
 
-    if (await isAlreadyProcessed(orderId)) {
+    if (await isAlreadyProcessed(supabase, orderId)) {
       const { data: shop } = await supabase
         .from("shops")
         .select("credits")

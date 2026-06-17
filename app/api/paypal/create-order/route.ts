@@ -4,12 +4,15 @@ import { TOPUP_PACKS, TRIAL_INVITE_CODE, type TopupPackId } from "@/lib/credit-p
 import { createPayPalOrder } from "@/lib/paypal";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 async function getAuthenticatedUser(req: NextRequest) {
+  const supabase = getSupabase();
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (token) {
     const { data: { user } } = await supabase.auth.getUser(token);

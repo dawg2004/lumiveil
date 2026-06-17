@@ -3,11 +3,15 @@ import Stripe from 'stripe'
 import { createClient } from '@supabase/supabase-js'
 import { TOPUP_PACKS, type TopupPackId } from '@/lib/credit-packs'
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getStripe() {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!);
+}
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const PRICE_MAP: Record<string, string> = {
   BASIC: process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC!,
@@ -17,6 +21,8 @@ const PRICE_MAP: Record<string, string> = {
 }
 
 export async function POST(request: NextRequest) {
+  const stripe = getStripe();
+  const supabase = getSupabase();
   try {
     const { priceId, type, packId } = await request.json()
 
