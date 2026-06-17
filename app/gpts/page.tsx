@@ -6,6 +6,8 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
   useCallback,
+  useEffect,
+  useRef,
   useMemo,
   useState,
 } from "react";
@@ -144,6 +146,83 @@ export default function GptsPage() {
   const [mosaicStyle, setMosaicStyle] = useState<MosaicStyle>("blur");
   const [mosaicStrength, setMosaicStrength] = useState<MosaicStrength>(3);
   const [compareRatio, setCompareRatio] = useState(50);
+
+  // Grok-v1.5 video generation
+  const [videoPrompt, setVideoPrompt] = useState("natural movement, cinematic");
+  const [videoDuration, setVideoDuration] = useState(5);
+  const [videoAspectRatio, setVideoAspectRatio] = useState("9:16");
+  const [videoStatus, setVideoStatus] = useState<"idle" | "submitting" | "polling" | "done" | "error">("idle");
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoStatusMsg, setVideoStatusMsg] = useState("");
+  const videoRequestRef = useRef<{ requestId: string; model: string } | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pollVideoStatus = useCallback(async (requestId: string, model: string, prompt: string, duration: number) => {
+    try {
+      const res = await fetch(
+        `/api/video?requestId=${encodeURIComponent(requestId)}&model=${encodeURIComponent(model)}&prompt=${encodeURIComponent(prompt)}&duration=${duration}&resolution=720p`
+      );
+      const data = await res.json() as { status: string; videoUrl?: string; queue_position?: number; error?: string };
+      if (data.status === "completed" && data.videoUrl) {
+        setVideoUrl(data.videoUrl);
+        setVideoStatus("done");
+        setVideoStatusMsg("");
+        videoRequestRef.current = null;
+        return;
+      }
+      if (data.error) {
+        setVideoStatus("error");
+        setVideoStatusMsg(data.error);
+        videoRequestRef.current = null;
+        return;
+      }
+      const pos = data.queue_position != null ? ` (待機 ${data.queue_position})` : "";
+      setVideoStatusMsg(`生成中…${pos}`);
+      pollTimerRef.current = setTimeout(() => void pollVideoStatus(requestId, model, prompt, duration), 4000);
+    } catch {
+      setVideoStatus("error");
+      setVideoStatusMsg("ポーリング中にエラーが発生しました");
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    };
+  }, []);
+
+  async function generateVideo() {
+    if (!sourceFile) return;
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    setVideoStatus("submitting");
+    setVideoUrl(null);
+    setVideoStatusMsg("リクエスト送信中…");
+
+    const formData = new FormData();
+    formData.set("file", sourceFile);
+    formData.set("model", "grok-v1.5");
+    formData.set("prompt", videoPrompt || "natural movement, cinematic");
+    formData.set("duration", String(videoDuration));
+    formData.set("resolution", "720p");
+    formData.set("aspectRatio", videoAspectRatio);
+
+    try {
+      const res = await fetch("/api/video", { method: "POST", body: formData });
+      const data = await res.json() as { requestId?: string; model?: string; error?: string };
+      if (!res.ok || !data.requestId) {
+        setVideoStatus("error");
+        setVideoStatusMsg(data.error ?? "送信に失敗しました");
+        return;
+      }
+      videoRequestRef.current = { requestId: data.requestId, model: data.model ?? "grok-v1.5" };
+      setVideoStatus("polling");
+      setVideoStatusMsg("キュー待機中…");
+      void pollVideoStatus(data.requestId, data.model ?? "grok-v1.5", videoPrompt, videoDuration);
+    } catch {
+      setVideoStatus("error");
+      setVideoStatusMsg("ネットワークエラーが発生しました");
+    }
+  }
 
   const postChat = useCallback(
     async (body: Record<string, unknown>) => {
@@ -481,6 +560,116 @@ export default function GptsPage() {
                 />
               </div>
             ) : null}
+          </Panel>
+
+          {/* Grok-v1.5 video generation panel */}
+          <Panel title="動画生成 — Grok-v1.5">
+            {!sourceFile ? (
+              <p className="text-sm text-stone-400">まず人物写真をアップロードしてください。</p>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-stone-300" htmlFor="video-prompt">
+                    プロンプト
+                  </label>
+                  <textarea
+                    className="w-full rounded-md border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-500 focus:border-amber-300/60 focus:outline-none"
+                    id="video-prompt"
+                    placeholder="natural movement, cinematic"
+                    rows={2}
+                    value={videoPrompt}
+                    onChange={(e) => setVideoPrompt(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-stone-300">秒数</p>
+                    <div className="flex gap-2">
+                      {[5, 10].map((s) => (
+                        <button
+                          key={s}
+                          className={`flex-1 rounded-md border px-3 py-2 text-sm transition ${
+                            videoDuration === s
+                              ? "border-amber-300 bg-amber-200 text-stone-950"
+                              : "border-stone-700 bg-stone-950 text-stone-100 hover:border-amber-300/60"
+                          }`}
+                          onClick={() => setVideoDuration(s)}
+                          type="button"
+                        >
+                          {s}秒
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-2 text-sm font-medium text-stone-300">比率</p>
+                    <div className="flex gap-2">
+                      {["9:16", "16:9", "1:1"].map((ar) => (
+                        <button
+                          key={ar}
+                          className={`flex-1 rounded-md border px-2 py-2 text-xs transition ${
+                            videoAspectRatio === ar
+                              ? "border-amber-300 bg-amber-200 text-stone-950"
+                              : "border-stone-700 bg-stone-950 text-stone-100 hover:border-amber-300/60"
+                          }`}
+                          onClick={() => setVideoAspectRatio(ar)}
+                          type="button"
+                        >
+                          {ar}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  className={`w-full rounded-md border px-4 py-3 text-sm font-medium transition ${
+                    videoStatus === "submitting" || videoStatus === "polling"
+                      ? "cursor-not-allowed border-stone-700 bg-stone-800 text-stone-400"
+                      : "border-amber-300/60 bg-amber-200 text-stone-950 hover:bg-amber-100"
+                  }`}
+                  disabled={videoStatus === "submitting" || videoStatus === "polling"}
+                  onClick={() => void generateVideo()}
+                  type="button"
+                >
+                  {videoStatus === "submitting" || videoStatus === "polling" ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border border-stone-600 border-t-amber-300" />
+                      {videoStatusMsg}
+                    </span>
+                  ) : (
+                    "Grok-v1.5 で動画生成"
+                  )}
+                </button>
+
+                {videoStatus === "error" && (
+                  <p className="rounded-md border border-red-800 bg-red-950/50 px-3 py-2 text-sm text-red-300">
+                    {videoStatusMsg}
+                  </p>
+                )}
+
+                {videoStatus === "done" && videoUrl && (
+                  <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
+                    <div className="border-b border-stone-800 px-3 py-2 text-sm text-stone-300">生成された動画</div>
+                    <video
+                      className="w-full"
+                      controls
+                      playsInline
+                      src={videoUrl}
+                    />
+                    <div className="border-t border-stone-800 px-3 py-2">
+                      <a
+                        className="text-xs text-amber-300 hover:underline"
+                        download="grok-v1.5-video.mp4"
+                        href={videoUrl}
+                      >
+                        ダウンロード
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </Panel>
 
           <Panel title={TEXT.panelActions}>
