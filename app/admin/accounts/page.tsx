@@ -150,6 +150,7 @@ export default function AdminAccountsPage() {
             <p style={{ marginTop: 6, color: "#9ba8ae", fontSize: 13 }}>クレジット残高・プラン・ショップ名を直接編集できます。shops が無いユーザーは管理画面から作成できます。</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noreferrer" style={falLinkStyle}>FALクレジット確認</a>
             <a href="/admin" style={smallButtonStyle}>生成履歴</a>
             <a href="/" style={smallButtonStyle}>アプリへ戻る</a>
             <button onClick={() => void loadAccounts()} disabled={loading} style={smallButtonStyle}>
@@ -297,6 +298,19 @@ const panelStyle = {
   padding: 14,
   border: "1px solid #9f9686",
   color: "#171717",
+};
+
+const falLinkStyle = {
+  padding: "8px 10px",
+  borderRadius: 8,
+  background: "#0d2e1e",
+  border: "1px solid #2a7a4a",
+  color: "#6ee7a0",
+  fontWeight: 600,
+  fontSize: 11,
+  cursor: "pointer",
+  textDecoration: "none",
+  whiteSpace: "nowrap" as const,
 };
 
 const smallButtonStyle = {

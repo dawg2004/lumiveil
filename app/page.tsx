@@ -182,6 +182,7 @@ export default function Home() {
   const [selectedHistoryIds, setSelectedHistoryIds] = useState<string[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDeleting, setHistoryDeleting] = useState(false);
+  const [historyDownloadingId, setHistoryDownloadingId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -764,21 +765,6 @@ export default function Home() {
 
       setEditResult(data.url);
       lastSavedEditResultRef.current = data.url;
-      try {
-        const token = await getAuthToken();
-        if (token) {
-          await fetch("/api/history", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({
-              prompt: `AI編集: ${editPrompt}`,
-              generated_image_url: data.url,
-              media_type: "image",
-              credits_used: 1,
-            }),
-          });
-        }
-      } catch (e) { /* ignore */ }
       void loadHistory();
       setEditStatus("編集が完了しました。");
     } catch (error) {
@@ -840,21 +826,6 @@ export default function Home() {
           setVideoRequestId(null);
           setVideoResult(data.videoUrl);
           lastSavedVideoResultRef.current = data.videoUrl;
-          try {
-            const token = await getAuthToken();
-            if (token) {
-              await fetch("/api/history", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({
-                  prompt: `${videoModel === "seedance" ? "Seedance動画" : "Grok動画"}: ${videoPrompt}`,
-                  generated_image_url: data.videoUrl,
-                  media_type: "video",
-                  credits_used: videoModel === "seedance" ? Math.max(1, Math.round(videoDuration * 2)) : Math.max(1, Math.round(videoDuration * (videoResolution === "480p" ? 1 : 2))),
-                }),
-              });
-            }
-          } catch (e) { /* ignore */ }
           void loadHistory();
           setVideoLoading(false);
           setVideoStatus("完成！");
@@ -887,7 +858,7 @@ export default function Home() {
     void pollVideoStatus();
     videoPollRef.current = setInterval(() => void pollVideoStatus(), 5000);
     return () => { if (videoPollRef.current) clearInterval(videoPollRef.current); };
-  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory, getAuthToken]);
+  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory]);
 
   useEffect(() => {
     if (tab === "avatar" || tab === "mosaic" || tab === "video") {
@@ -1184,9 +1155,15 @@ export default function Home() {
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <div style={sectionLabelStyle}>生成履歴</div>
-                    <div style={{ fontSize: 20, fontWeight: 500, color: "#171717", marginBottom: 6 }}>生成した画像・動画</div>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                      <div style={{ fontSize: 20, fontWeight: 500, color: "#171717" }}>生成した画像・動画</div>
+                      <div style={{ fontSize: 11, color: "#9b8c5a" }}>※ 動画は約1時間で失効します</div>
+                    </div>
                     <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
                       アカウントに紐づいた画像・動画生成の結果を新しい順に最大50件まで表示します。
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#9b8c5a", lineHeight: 1.6 }}>
+                      ※ 過去に生成したファイルは約1時間で失効します。現在は生成時にサーバーへ自動保存されるため、以降の生成物は永続的に保持されます。
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -1220,9 +1197,30 @@ export default function Home() {
                     color: historyStatus.includes("ログイン") || historyStatus.includes("取得できません") ? "#b84242" : "#6f5310",
                     fontSize: 12,
                     fontWeight: 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                   }}
                 >
-                  {historyStatus}
+                  <span style={{ flex: 1 }}>{historyStatus}</span>
+                  {historyStatus.includes("ログイン状態を確認できませんでした") && (
+                    <a
+                      href="/login"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #b84242",
+                        background: "rgba(184,66,66,0.12)",
+                        color: "#b84242",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      再ログイン
+                    </a>
+                  )}
                 </div>
               ) : null}
 
@@ -1319,13 +1317,24 @@ export default function Home() {
                           <span style={{ fontSize: 11, color: "#6a6258" }}>
                             {item.credits_used ?? 1} credit
                           </span>
-                          <a
-                            href={item.generated_image_url}
-                            download
-                            style={{ ...smallButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", pointerEvents: hasMedia ? "auto" : "none", opacity: hasMedia ? 1 : 0.5 }}
+                          <button
+                            disabled={!hasMedia || historyDownloadingId === item.id}
+                            onClick={async () => {
+                              if (!hasMedia || historyDownloadingId) return;
+                              setHistoryDownloadingId(item.id);
+                              const fallback = isVideo ? "video.mp4" : "image.jpg";
+                              try {
+                                await saveFileAs(item.generated_image_url, null, fallback);
+                              } catch {
+                                // ignore user cancel
+                              } finally {
+                                setHistoryDownloadingId(null);
+                              }
+                            }}
+                            style={{ ...smallButtonStyle, opacity: hasMedia ? 1 : 0.5, cursor: hasMedia ? "pointer" : "not-allowed" }}
                           >
-                            保存
-                          </a>
+                            {historyDownloadingId === item.id ? "保存中..." : "保存"}
+                          </button>
                         </div>
                       </div>
                     </div>

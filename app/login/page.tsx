@@ -35,8 +35,10 @@ export default function LoginPage() {
       minHeight: '100vh',
       background: '#0a0e1a',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
+      gap: '20px',
       fontFamily: 'var(--font-lumiveil-sans)',
     }}>
       <div style={{
@@ -149,7 +151,26 @@ export default function LoginPage() {
             {isSignUp ? 'すでにアカウントをお持ちの方はこちら' : 'アカウントをお持ちでない方はこちら'}
           </button>
         </div>
+
       </div>
+
+      <a
+        href="/admin-login"
+        style={{
+          display: 'inline-block',
+          padding: '10px 20px',
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid #334155',
+          borderRadius: '8px',
+          color: '#94a3b8',
+          fontSize: '13px',
+          fontWeight: 500,
+          textDecoration: 'none',
+          letterSpacing: '0.04em',
+        }}
+      >
+        管理者用ログイン
+      </a>
     </div>
   )
 }

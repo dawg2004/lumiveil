@@ -4,10 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 import { TOPUP_PACKS, type TopupPackId } from '@/lib/credit-packs'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const PRICE_MAP: Record<string, string> = {
   BASIC: process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC!,
@@ -27,7 +29,7 @@ export async function POST(request: NextRequest) {
       }
 
       const token = request.headers.get('authorization')?.replace('Bearer ', '')
-      const { data: { user }, error: authError } = await supabase.auth.getUser(token!)
+      const { data: { user }, error: authError } = await getAdminClient().auth.getUser(token!)
       if (authError || !user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }

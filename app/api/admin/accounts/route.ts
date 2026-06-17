@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { ADMIN_PANEL_COOKIE_NAME, isValidAdminPanelSessionToken } from "@/lib/admin-auth";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 type ShopRecord = {
   id: string;
@@ -31,7 +34,14 @@ function getAdminEmails() {
     .filter(Boolean);
 }
 
-async function requireAdmin(): Promise<AdminAuthResult> {
+async function requireAdmin(req: NextRequest): Promise<AdminAuthResult> {
+  // admin panel cookie による認証
+  const token = req.cookies.get(ADMIN_PANEL_COOKIE_NAME)?.value;
+  if (await isValidAdminPanelSessionToken(token)) {
+    return { ok: true, email: "admin" };
+  }
+
+  // Supabase セッションによるフォールバック
   const cookieSupabase = await createServerSupabaseClient();
   const { data: { user } } = await cookieSupabase.auth.getUser();
   const email = user?.email?.toLowerCase();
@@ -55,8 +65,8 @@ async function requireAdmin(): Promise<AdminAuthResult> {
 
 async function fetchAccounts() {
   const [{ data: usersData, error: usersError }, { data: shops, error: shopsError }] = await Promise.all([
-    supabase.auth.admin.listUsers({ page: 1, perPage: 1000 }),
-    supabase
+    getAdminClient().auth.admin.listUsers({ page: 1, perPage: 1000 }),
+    getAdminClient()
       .from("shops")
       .select("id, user_id, name, plan, credits, created_at")
       .order("created_at", { ascending: false }),
@@ -83,7 +93,7 @@ async function fetchAccounts() {
 }
 
 async function ensureShopForUser(userId: string, email: string) {
-  const { data: existing, error: existingError } = await supabase
+  const { data: existing, error: existingError } = await getAdminClient()
     .from("shops")
     .select("id, user_id, name, plan, credits, created_at")
     .eq("user_id", userId)
@@ -97,7 +107,7 @@ async function ensureShopForUser(userId: string, email: string) {
     return existing as ShopRecord;
   }
 
-  const { data: created, error: createError } = await supabase
+  const { data: created, error: createError } = await getAdminClient()
     .from("shops")
     .insert({
       id: userId,
@@ -116,9 +126,9 @@ async function ensureShopForUser(userId: string, email: string) {
   return created as ShopRecord;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (!auth.ok) {
       return auth.response;
     }
@@ -138,7 +148,7 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const auth = await requireAdmin();
+    const auth = await requireAdmin(req);
     if (!auth.ok) {
       return auth.response;
     }
@@ -173,7 +183,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (Object.keys(updates).length > 0) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await getAdminClient()
         .from("shops")
         .update(updates)
         .eq("user_id", userId);

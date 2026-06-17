@@ -3,15 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { TRIAL_FREE_CREDITS, TRIAL_FREE_IMAGE_GENERATIONS, TRIAL_FREE_VIDEO_GENERATIONS, TRIAL_INVITE_CODE } from "@/lib/credit-packs";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 async function getAuthenticatedUser(req: NextRequest) {
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (token) {
-    const { data: { user } } = await supabase.auth.getUser(token);
+    const { data: { user } } = await getAdminClient().auth.getUser(token);
     if (user) return user;
   }
 
@@ -33,13 +35,13 @@ export async function POST(req: NextRequest) {
     }
 
     const transactionId = `invite:${TRIAL_INVITE_CODE}:${user.id}`;
-    const { data: existingTransaction } = await supabase
+    const { data: existingTransaction } = await getAdminClient()
       .from("credit_transactions")
       .select("id")
       .eq("stripe_id", transactionId)
       .maybeSingle();
 
-    const { data: shop } = await supabase
+    const { data: shop } = await getAdminClient()
       .from("shops")
       .select("id, credits")
       .eq("user_id", user.id)
@@ -55,8 +57,8 @@ export async function POST(req: NextRequest) {
 
     if (shop) {
       const nextCredits = Number(shop.credits ?? 0) + TRIAL_FREE_CREDITS;
-      await supabase.from("shops").update({ credits: nextCredits }).eq("id", shop.id);
-      await supabase.from("credit_transactions").insert({
+      await getAdminClient().from("shops").update({ credits: nextCredits }).eq("id", shop.id);
+      await getAdminClient().from("credit_transactions").insert({
         shop_id: shop.id,
         type: "topup",
         amount: TRIAL_FREE_CREDITS,
@@ -67,14 +69,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, credits: nextCredits });
     }
 
-    const { data: newShop } = await supabase
+    const { data: newShop } = await getAdminClient()
       .from("shops")
       .insert({ user_id: user.id, name: "新規店舗", plan: "free", credits: TRIAL_FREE_CREDITS })
       .select("id")
       .single();
 
     if (newShop) {
-      await supabase.from("credit_transactions").insert({
+      await getAdminClient().from("credit_transactions").insert({
         shop_id: newShop.id,
         type: "topup",
         amount: TRIAL_FREE_CREDITS,

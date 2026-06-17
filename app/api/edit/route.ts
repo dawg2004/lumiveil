@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { uploadToStorage } from "@/lib/upload-to-storage";
 
 export const runtime = "nodejs";
 
@@ -47,11 +48,18 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
 
 async function uploadToFal(file: File): Promise<string> {
   fal.config({ credentials: FAL_KEY });
-  return fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  try {
+    return await fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  } catch {
+    return fal.storage.upload(file);
+  }
 }
 
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
+    if (error.name === "ApiError" && error.message === "Forbidden") {
+      return "画像のアップロードに失敗しました（FAL API 認証エラー）。しばらく待ってから再度お試しください。";
+    }
     const cause = error.cause instanceof Error ? ` (${error.cause.message})` : "";
     return `${error.name}: ${error.message}${cause}`;
   }
@@ -109,8 +117,19 @@ async function saveGenerationHistory(adminClient: SupabaseClient, userId: string
     throw new Error(shopError.message);
   }
 
+  const shopId = shop?.id ?? userId;
+
+  const { data: existing } = await adminClient
+    .from("generation_history")
+    .select("id")
+    .eq("shop_id", shopId)
+    .contains("image_urls", [generatedUrl])
+    .maybeSingle();
+
+  if (existing) return;
+
   const { error } = await adminClient.from("generation_history").insert({
-    shop_id: shop?.id ?? userId,
+    shop_id: shopId,
     avatar_id: null,
     prompt: encodeHistoryPrompt({
       kind: "image",
@@ -204,9 +223,16 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await response.json();
-    const url = data.images?.[0]?.url;
-    if (!url) {
+    const falUrl = data.images?.[0]?.url;
+    if (!falUrl) {
       throw new Error("URL not found");
+    }
+
+    let url = falUrl;
+    try {
+      url = await uploadToStorage(falUrl, "image");
+    } catch (err) {
+      console.error("Edit storage upload failed, using fal URL:", err);
     }
 
     const adminClient = createAdminSupabaseClient();

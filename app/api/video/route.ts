@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { uploadToStorage } from "@/lib/upload-to-storage";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
+
+function createAdminSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 const MODEL_IDS: Record<string, string> = {
   grok: "xai/grok-imagine-video/image-to-video",
@@ -13,7 +21,11 @@ const MODEL_IDS: Record<string, string> = {
 
 async function uploadToFal(file: File): Promise<string> {
   fal.config({ credentials: FAL_KEY });
-  return fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  try {
+    return await fal.storage.upload(file, { lifecycle: { expiresIn: "1d" } });
+  } catch {
+    return fal.storage.upload(file);
+  }
 }
 
 function configureFal() {
@@ -55,45 +67,47 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
 }
 
 async function saveVideoHistory({
-  client,
   userId,
   model,
   prompt,
   videoUrl,
   creditsUsed,
 }: {
-  client: SupabaseClient;
   userId: string;
   model: string;
   prompt: string;
   videoUrl: string;
   creditsUsed: number;
 }) {
-  const { data: shop } = await client
+  const adminClient = createAdminSupabaseClient();
+  const { data: shop } = await adminClient
     .from("shops")
     .select("id")
     .eq("user_id", userId)
     .maybeSingle();
   const shopId = shop?.id ?? userId;
+
+  const { data: existing } = await adminClient
+    .from("generation_history")
+    .select("id")
+    .eq("shop_id", shopId)
+    .contains("image_urls", [videoUrl])
+    .maybeSingle();
+
+  if (existing) return;
+
   const historyPrompt = encodeHistoryPrompt({
     kind: "video",
     prompt: `${model === "seedance" ? "Seedance動画" : "Grok動画"}: ${prompt}`,
     url: videoUrl,
   });
 
-  const { data: existing } = await client
-    .from("generation_history")
-    .select("id")
-    .eq("shop_id", shopId)
-    .eq("prompt", historyPrompt)
-    .maybeSingle();
-
-  if (existing) return;
-
-  const { error } = await client.from("generation_history").insert({
+  const { error } = await adminClient.from("generation_history").insert({
     shop_id: shopId,
     avatar_id: null,
     prompt: historyPrompt,
+    image_urls: [videoUrl],
+    settings: { media_type: "video" },
     credits_used: creditsUsed,
   });
 
@@ -191,15 +205,22 @@ export async function GET(req: NextRequest) {
     if (statusData.status === "COMPLETED") {
       const result = await fal.queue.result(modelId, { requestId });
       const resultData = result.data as { video?: { url?: string } };
-      const videoUrl = resultData.video?.url;
-      if (!videoUrl) {
+      const falVideoUrl = resultData.video?.url;
+      if (!falVideoUrl) {
         throw new Error("result video url is missing");
       }
-      const { user, client } = await getAuthenticatedContext(req);
+
+      let videoUrl = falVideoUrl;
+      try {
+        videoUrl = await uploadToStorage(falVideoUrl, "video");
+      } catch (err) {
+        console.error("Video storage upload failed, using fal URL:", err);
+      }
+
+      const { user } = await getAuthenticatedContext(req);
       if (user) {
         const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
         await saveVideoHistory({
-          client,
           userId: user.id,
           model,
           prompt,
