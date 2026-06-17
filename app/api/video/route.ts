@@ -9,6 +9,7 @@ const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 const MODEL_IDS: Record<string, string> = {
   "grok-imagine": "xai/grok-imagine-video/image-to-video",
   grok: "xai/grok-imagine-video/image-to-video",
+  "grok-v1.5": "xai/grok-imagine-video/v1.5/image-to-video",
   seedance: "bytedance/seedance-2.0/fast/image-to-video",
   "wan-i2v-flash": "wan/v2.6/image-to-video/flash",
   "wan-reference-to-video": "wan/v2.6/reference-to-video",
@@ -17,6 +18,7 @@ const MODEL_IDS: Record<string, string> = {
 const MODEL_LABELS: Record<string, string> = {
   "grok-imagine": "Grok動画",
   grok: "Grok動画",
+  "grok-v1.5": "Grok v1.5動画",
   seedance: "Seedance動画",
   "wan-i2v-flash": "Wan Flash動画",
   "wan-reference-to-video": "Wan Reference動画",
@@ -177,7 +179,7 @@ export async function POST(req: NextRequest) {
       input.generate_audio = true;
     } else if (model === "wan-i2v-flash") {
       input.duration = String(duration === 10 ? 10 : 5);
-    } else if (model === "grok" || model === "grok-imagine") {
+    } else if (model === "grok" || model === "grok-imagine" || model === "grok-v1.5") {
       input.duration = duration;
       input.aspect_ratio = aspectRatio;
     }
