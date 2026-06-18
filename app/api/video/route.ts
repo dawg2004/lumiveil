@@ -14,7 +14,7 @@ function createAdminSupabaseClient() {
 }
 
 const MODEL_IDS: Record<string, string> = {
-  grok: "xai/grok-imagine-video/image-to-video",
+  grok: "xai/grok-imagine-video/v1.5/image-to-video",
   seedance: "bytedance/seedance-2.0/fast/image-to-video",
 };
 
