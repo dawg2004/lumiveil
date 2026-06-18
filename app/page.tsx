@@ -2300,7 +2300,7 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>尺</div>
                   <div style={buttonRowStyle}>
-                    {[5, 10].map(d => (
+                    {[5, 10, 15].map(d => (
                       <button key={d} onClick={() => setVideoDuration(d)} style={choiceButtonStyle(videoDuration === d)}>
                         {d}秒
                       </button>
