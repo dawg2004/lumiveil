@@ -7,7 +7,7 @@ import { uploadToStorage } from "@/lib/upload-to-storage";
 export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
-const FACE_SWAP_MODEL = "fal-ai/face-swap";
+const FACE_SWAP_MODEL = "easel-ai/advanced-face-swap";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
 function createBearerSupabaseClient(token: string) {
@@ -135,8 +135,10 @@ export async function POST(req: NextRequest) {
 
     const result = await fal.subscribe(FACE_SWAP_MODEL, {
       input: {
-        base_image_url: targetUrl,  // 体（合成先）
-        swap_image_url: faceUrl,    // 顔（差し替える顔）
+        face_image_0: faceUrl,
+        target_image: targetUrl,
+        workflow_type: workflowType,
+        upscale: true,
       },
     });
 
