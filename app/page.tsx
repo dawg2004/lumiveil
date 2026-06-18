@@ -206,6 +206,7 @@ export default function Home() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyDeleting, setHistoryDeleting] = useState(false);
   const [historyDownloadingId, setHistoryDownloadingId] = useState<string | null>(null);
+  const [historyToVideoId, setHistoryToVideoId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1368,6 +1369,35 @@ export default function Home() {
                             {historyDownloadingId === item.id ? "保存中..." : "保存"}
                           </button>
                         </div>
+                        {!isVideo && hasMedia && (
+                          <button
+                            disabled={historyToVideoId === item.id}
+                            onClick={async () => {
+                              if (historyToVideoId) return;
+                              setHistoryToVideoId(item.id);
+                              try {
+                                const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
+                                const file = await imageUrlToFile(item.generated_image_url, filename);
+                                handleVideoUpload(file);
+                                setTab("video");
+                              } catch {
+                                // ignore
+                              } finally {
+                                setHistoryToVideoId(null);
+                              }
+                            }}
+                            style={{
+                              ...smallButtonStyle,
+                              marginTop: 8,
+                              width: "100%",
+                              background: historyToVideoId === item.id ? "#555" : "#3a3028",
+                              color: "#f5f0e8",
+                              cursor: historyToVideoId === item.id ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            {historyToVideoId === item.id ? "読み込み中..." : "▶ 動画生成"}
+                          </button>
+                        )}
                       </div>
                     </div>
                     );
