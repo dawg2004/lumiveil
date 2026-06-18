@@ -190,6 +190,8 @@ export default function Home() {
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
+  const [faceswapApplyHair, setFaceswapApplyHair] = useState(true);
+  const [faceswapDetectedHair, setFaceswapDetectedHair] = useState<{ hairstyle: string; hairColor: string } | null>(null);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -827,19 +829,23 @@ export default function Home() {
   const submitFaceswap = useCallback(async () => {
     if (!faceFile || !targetFile) return;
     setFaceswapLoading(true);
-    setFaceswapStatus("画像をアップロード中...");
+    setFaceswapDetectedHair(null);
+    setFaceswapStatus(faceswapApplyHair ? "画像をアップロード中...（髪型マッチング込み）" : "画像をアップロード中...");
     setFaceswapResult(null);
     try {
       const token = await getAuthToken();
       const formData = new FormData();
       formData.append("face_file", faceFile);
       formData.append("target_file", targetFile);
+      formData.append("apply_hair", String(faceswapApplyHair));
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
+      setFaceswapStatus(faceswapApplyHair ? "顔ハメ + 髪型解析中..." : "顔ハメ処理中...");
       const res = await fetch("/api/faceswap", { method: "POST", headers, body: formData });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "顔ハメに失敗しました");
       setFaceswapResult(data.url);
+      if (data.detectedHair) setFaceswapDetectedHair(data.detectedHair);
       setFaceswapStatus("完成！");
       if (data.credits != null) setCredits(data.credits);
       void loadHistory();
@@ -848,7 +854,7 @@ export default function Home() {
     } finally {
       setFaceswapLoading(false);
     }
-  }, [faceFile, targetFile, getAuthToken, loadHistory]);
+  }, [faceFile, targetFile, faceswapApplyHair, getAuthToken, loadHistory]);
 
   const resetFaceswap = useCallback(() => {
     setFaceFile(null);
@@ -2432,9 +2438,32 @@ export default function Home() {
               {/* 右カラム：設定 */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>髪型マッチング</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "#4a3a28" }}>
+                    <input
+                      type="checkbox"
+                      checked={faceswapApplyHair}
+                      onChange={e => setFaceswapApplyHair(e.target.checked)}
+                      style={{ width: 14, height: 14, accentColor: "#b84242" }}
+                    />
+                    <span>顔画像の髪型を自動で適用する</span>
+                  </label>
+                  {faceswapApplyHair && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
+                      Grok Visionで顔画像の髪型・髪色を解析し、合成後の画像に適用します。
+                    </div>
+                  )}
+                  {faceswapDetectedHair && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: "#4a8a6a", background: "rgba(74,138,106,0.08)", borderRadius: 6, padding: "6px 10px", lineHeight: 1.6 }}>
+                      検出: {faceswapDetectedHair.hairstyle} / {faceswapDetectedHair.hairColor}
+                    </div>
+                  )}
+                </div>
+
+                <div style={panelStyle}>
                   <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
                     接続先: fal-ai/face-swap<br />
-                    料金目安: 約$0.05/枚
+                    料金目安: 約$0.05/枚（髪型マッチングONで+$0.05）
                   </div>
                 </div>
 

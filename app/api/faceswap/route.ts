@@ -7,8 +7,25 @@ import { uploadToStorage } from "@/lib/upload-to-storage";
 export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
+const GROK_API_KEY = process.env.XAI_API_KEY ?? process.env.FAL_API_KEY!;
 const FACE_SWAP_MODEL = "fal-ai/face-swap";
+const HAIR_CHANGE_MODEL = "fal-ai/image-apps-v2/hair-change";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
+
+const HAIRSTYLE_ENUMS = [
+  "short_hair","medium_long_hair","long_hair","curly_hair","wavy_hair",
+  "high_ponytail","bun","bob_cut","pixie_cut","braids","straight_hair",
+  "afro","dreadlocks","buzz_cut","mohawk","bangs","side_part","middle_part",
+] as const;
+
+const HAIR_COLOR_ENUMS = [
+  "black","dark_brown","light_brown","blonde","platinum_blonde","red",
+  "auburn","gray","silver","blue","green","purple","pink","rainbow",
+  "natural","highlights","ombre","balayage",
+] as const;
+
+type HairstyleEnum = typeof HAIRSTYLE_ENUMS[number];
+type HairColorEnum = typeof HAIR_COLOR_ENUMS[number];
 
 function createBearerSupabaseClient(token: string) {
   return createClient(
@@ -96,6 +113,64 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
   return nextCredits;
 }
 
+// Grok Visionで顔画像の髪型・髪色をenum値に変換
+async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum }> {
+  const prompt = `Look at this person's hairstyle and hair color carefully.
+
+Choose EXACTLY ONE value for hairstyle from this list:
+${HAIRSTYLE_ENUMS.join(", ")}
+
+Choose EXACTLY ONE value for hair color from this list:
+${HAIR_COLOR_ENUMS.join(", ")}
+
+Reply in JSON only, no explanation:
+{"hairstyle": "<value>", "hairColor": "<value>"}`;
+
+  const res = await fetch("https://api.x.ai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${GROK_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "grok-2-vision-latest",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: faceImageUrl } },
+            { type: "text", text: prompt },
+          ],
+        },
+      ],
+      max_tokens: 100,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Grok vision failed: ${res.status}`);
+  }
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content ?? "{}";
+
+  // JSONを抽出してパース
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("Grok response parse failed");
+
+  const parsed = JSON.parse(jsonMatch[0]) as { hairstyle?: string; hairColor?: string };
+
+  const hairstyle = HAIRSTYLE_ENUMS.includes(parsed.hairstyle as HairstyleEnum)
+    ? (parsed.hairstyle as HairstyleEnum)
+    : "medium_long_hair";
+
+  const hairColor = HAIR_COLOR_ENUMS.includes(parsed.hairColor as HairColorEnum)
+    ? (parsed.hairColor as HairColorEnum)
+    : "natural";
+
+  return { hairstyle, hairColor };
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!FAL_KEY) {
@@ -119,6 +194,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const faceFile = formData.get("face_file");
     const targetFile = formData.get("target_file");
+    const applyHair = formData.get("apply_hair") === "true";
 
     if (!(faceFile instanceof File) || !(targetFile instanceof File)) {
       return NextResponse.json({ error: "face_file と target_file の両方が必要です" }, { status: 400 });
@@ -126,36 +202,67 @@ export async function POST(req: NextRequest) {
 
     fal.config({ credentials: FAL_KEY });
 
-    // 両画像を並列アップロード
+    // Step 1: 両画像を並列アップロード
     const [faceUrl, targetUrl] = await Promise.all([
       uploadToFal(faceFile),
       uploadToFal(targetFile),
     ]);
 
-    // fal-ai/face-swap: base_image_url=体(合成先), swap_image_url=顔
-    const result = await fal.subscribe(FACE_SWAP_MODEL, {
+    // Step 2: 顔ハメ
+    const swapResult = await fal.subscribe(FACE_SWAP_MODEL, {
       input: {
         base_image_url: targetUrl,
         swap_image_url: faceUrl,
       },
     });
 
-    const resultData = result.data as { image?: { url?: string } };
-    const falUrl = resultData.image?.url;
-    if (!falUrl) throw new Error("result image url is missing");
+    const swapData = swapResult.data as { image?: { url?: string } };
+    const swappedUrl = swapData.image?.url;
+    if (!swappedUrl) throw new Error("face-swap result url is missing");
 
-    let url = falUrl;
+    let finalUrl = swappedUrl;
+
+    // Step 3: 髪型マッチング（オプション）
+    let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum } | null = null;
+    if (applyHair) {
+      try {
+        detectedHair = await detectHairFromImage(faceUrl);
+
+        const hairResult = await fal.subscribe(HAIR_CHANGE_MODEL, {
+          input: {
+            image_url: swappedUrl,
+            target_hairstyle: detectedHair.hairstyle,
+            hair_color: detectedHair.hairColor,
+          },
+        });
+
+        const hairData = hairResult.data as { images?: Array<{ url?: string }> };
+        const hairUrl = hairData.images?.[0]?.url;
+        if (hairUrl) {
+          finalUrl = hairUrl;
+        }
+      } catch (err) {
+        // 髪型変更が失敗しても顔ハメ結果は返す
+        console.error("Hair change failed, returning swap result:", err);
+      }
+    }
+
+    // Supabaseに保存
     try {
-      url = await uploadToStorage(falUrl, "image");
+      finalUrl = await uploadToStorage(finalUrl, "image");
     } catch (err) {
-      console.error("Faceswap storage upload failed, using fal URL:", err);
+      console.error("Storage upload failed, using fal URL:", err);
     }
 
     const adminClient = createAdminSupabaseClient();
-    await saveGenerationHistory(adminClient, user.id, url);
+    await saveGenerationHistory(adminClient, user.id, finalUrl);
     const credits = await decrementCredits(adminClient, shop.id, currentCredits);
 
-    return NextResponse.json({ url, credits });
+    return NextResponse.json({
+      url: finalUrl,
+      credits,
+      detectedHair,
+    });
   } catch (error) {
     const msg = getErrorMessage(error);
     console.error("faceswap route failed", msg);
