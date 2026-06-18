@@ -187,7 +187,6 @@ export default function Home() {
   const [faceSrc, setFaceSrc] = useState<string | null>(null);
   const [targetFile, setTargetFile] = useState<File | null>(null);
   const [targetSrc, setTargetSrc] = useState<string | null>(null);
-  const [faceswapWorkflow, setFaceswapWorkflow] = useState<"target_hair" | "user_hair">("user_hair");
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
@@ -835,7 +834,6 @@ export default function Home() {
       const formData = new FormData();
       formData.append("face_file", faceFile);
       formData.append("target_file", targetFile);
-      formData.append("workflow_type", faceswapWorkflow);
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/faceswap", { method: "POST", headers, body: formData });
@@ -850,7 +848,7 @@ export default function Home() {
     } finally {
       setFaceswapLoading(false);
     }
-  }, [faceFile, targetFile, faceswapWorkflow, getAuthToken, loadHistory]);
+  }, [faceFile, targetFile, getAuthToken, loadHistory]);
 
   const resetFaceswap = useCallback(() => {
     setFaceFile(null);
@@ -2434,32 +2432,9 @@ export default function Home() {
               {/* 右カラム：設定 */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
-                  <div style={sectionLabelStyle}>髪の扱い</div>
-                  <div style={buttonRowStyle}>
-                    <button
-                      onClick={() => setFaceswapWorkflow("user_hair")}
-                      style={choiceButtonStyle(faceswapWorkflow === "user_hair")}
-                    >
-                      体側の髪を残す
-                    </button>
-                    <button
-                      onClick={() => setFaceswapWorkflow("target_hair")}
-                      style={choiceButtonStyle(faceswapWorkflow === "target_hair")}
-                    >
-                      顔側の髪を残す
-                    </button>
-                  </div>
-                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
-                    体側の髪を残す：合成先の体の髪型を保持<br />
-                    顔側の髪を残す：顔画像の髪型を保持
-                  </div>
-                </div>
-
-                <div style={panelStyle}>
                   <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
-                    接続先: easel-ai/advanced-face-swap<br />
-                    料金目安: 約$0.05〜$0.10/枚<br />
-                    2xアップスケール適用済み
+                    接続先: fal-ai/face-swap<br />
+                    料金目安: 約$0.05/枚
                   </div>
                 </div>
 
