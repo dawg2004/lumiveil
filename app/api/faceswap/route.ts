@@ -7,9 +7,9 @@ import { uploadToStorage } from "@/lib/upload-to-storage";
 export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
-const GROK_API_KEY = process.env.XAI_API_KEY ?? process.env.FAL_API_KEY!;
 const FACE_SWAP_MODEL = "fal-ai/face-swap";
 const HAIR_CHANGE_MODEL = "fal-ai/image-apps-v2/hair-change";
+const VISION_MODEL = "fal-ai/moondream/batched";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
 const HAIRSTYLE_ENUMS = [
@@ -114,61 +114,69 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
 }
 
 // Grok Visionで顔画像の髪型・髪色をenum値に変換
-async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum }> {
-  const prompt = `Look at this person's hairstyle and hair color carefully.
-
-Choose EXACTLY ONE value for hairstyle from this list:
-${HAIRSTYLE_ENUMS.join(", ")}
-
-Choose EXACTLY ONE value for hair color from this list:
-${HAIR_COLOR_ENUMS.join(", ")}
-
-Reply in JSON only, no explanation:
-{"hairstyle": "<value>", "hairColor": "<value>"}`;
-
-  const res = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${GROK_API_KEY}`,
-      "Content-Type": "application/json",
+// Moondreamで画像に質問して回答テキストを得る
+async function askMoondream(imageUrl: string, prompt: string): Promise<string> {
+  const result = await fal.subscribe(VISION_MODEL, {
+    input: {
+      inputs: [{ image_url: imageUrl, prompt }],
     },
-    body: JSON.stringify({
-      model: "grok-2-vision-latest",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: faceImageUrl } },
-            { type: "text", text: prompt },
-          ],
-        },
-      ],
-      max_tokens: 100,
-    }),
   });
+  const data = result.data as { outputs?: string[]; output?: string };
+  if (Array.isArray(data.outputs) && data.outputs[0]) return data.outputs[0];
+  if (typeof data.output === "string") return data.output;
+  return "";
+}
 
-  if (!res.ok) {
-    throw new Error(`Grok vision failed: ${res.status}`);
-  }
+// 回答テキストからenum値にマッピング
+function mapHairstyle(text: string): HairstyleEnum {
+  const t = text.toLowerCase();
+  if (t.includes("buzz")) return "buzz_cut";
+  if (t.includes("pixie")) return "pixie_cut";
+  if (t.includes("bob")) return "bob_cut";
+  if (t.includes("bun")) return "bun";
+  if (t.includes("ponytail")) return "high_ponytail";
+  if (t.includes("braid")) return "braids";
+  if (t.includes("afro")) return "afro";
+  if (t.includes("dread")) return "dreadlocks";
+  if (t.includes("mohawk")) return "mohawk";
+  if (t.includes("bang")) return "bangs";
+  if (t.includes("curl")) return "curly_hair";
+  if (t.includes("wav")) return "wavy_hair";
+  if (t.includes("straight")) return "straight_hair";
+  if (t.includes("short")) return "short_hair";
+  if (t.includes("long")) return "long_hair";
+  return "medium_long_hair";
+}
 
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? "{}";
+function mapHairColor(text: string): HairColorEnum {
+  const t = text.toLowerCase();
+  if (t.includes("platinum")) return "platinum_blonde";
+  if (t.includes("blond")) return "blonde";
+  if (t.includes("dark brown") || t.includes("dark-brown")) return "dark_brown";
+  if (t.includes("light brown") || t.includes("light-brown")) return "light_brown";
+  if (t.includes("brown")) return "dark_brown";
+  if (t.includes("auburn")) return "auburn";
+  if (t.includes("red")) return "red";
+  if (t.includes("gray") || t.includes("grey")) return "gray";
+  if (t.includes("silver")) return "silver";
+  if (t.includes("blue")) return "blue";
+  if (t.includes("green")) return "green";
+  if (t.includes("purple")) return "purple";
+  if (t.includes("pink")) return "pink";
+  if (t.includes("black")) return "black";
+  return "natural";
+}
 
-  // JSONを抽出してパース
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Grok response parse failed");
+async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum }> {
+  const [styleText, colorText] = await Promise.all([
+    askMoondream(faceImageUrl, "Describe this person's hairstyle in a few words (length and shape, e.g. short, long, curly, wavy, straight, bob, ponytail, bun)."),
+    askMoondream(faceImageUrl, "What is the hair color of this person? Answer with one or two words."),
+  ]);
 
-  const parsed = JSON.parse(jsonMatch[0]) as { hairstyle?: string; hairColor?: string };
-
-  const hairstyle = HAIRSTYLE_ENUMS.includes(parsed.hairstyle as HairstyleEnum)
-    ? (parsed.hairstyle as HairstyleEnum)
-    : "medium_long_hair";
-
-  const hairColor = HAIR_COLOR_ENUMS.includes(parsed.hairColor as HairColorEnum)
-    ? (parsed.hairColor as HairColorEnum)
-    : "natural";
-
-  return { hairstyle, hairColor };
+  return {
+    hairstyle: mapHairstyle(styleText),
+    hairColor: mapHairColor(colorText),
+  };
 }
 
 export async function POST(req: NextRequest) {

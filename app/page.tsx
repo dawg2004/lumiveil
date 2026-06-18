@@ -2450,7 +2450,7 @@ export default function Home() {
                   </label>
                   {faceswapApplyHair && (
                     <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
-                      Grok Visionで顔画像の髪型・髪色を解析し、合成後の画像に適用します。
+                      AIが顔画像の髪型・髪色を解析し、合成後の画像に適用します。
                     </div>
                   )}
                   {faceswapDetectedHair && (
