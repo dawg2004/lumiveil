@@ -5,7 +5,7 @@ import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { createClient } from "@/lib/supabase";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 
-type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "plan" | "mypage";
+type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "history" | "plan" | "mypage";
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
@@ -34,6 +34,7 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "avatar", label: "キャスト登録", mobileLabel: "キャスト" },
   { id: "mosaic", label: "モザイク", mobileLabel: "モザイク" },
   { id: "edit", label: "画像編集", mobileLabel: "編集" },
+  { id: "faceswap", label: "顔ハメ", mobileLabel: "顔ハメ" },
   { id: "video", label: "動画生成", mobileLabel: "動画" },
   { id: "history", label: "履歴", mobileLabel: "履歴" },
   { id: "plan", label: "プラン", mobileLabel: "プラン" },
@@ -181,6 +182,15 @@ export default function Home() {
   const [editLoading, setEditLoading] = useState(false);
   const [editResult, setEditResult] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState("");
+  // faceswap
+  const [faceFile, setFaceFile] = useState<File | null>(null);
+  const [faceSrc, setFaceSrc] = useState<string | null>(null);
+  const [targetFile, setTargetFile] = useState<File | null>(null);
+  const [targetSrc, setTargetSrc] = useState<string | null>(null);
+  const [faceswapWorkflow, setFaceswapWorkflow] = useState<"target_hair" | "user_hair">("target_hair");
+  const [faceswapLoading, setFaceswapLoading] = useState(false);
+  const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
+  const [faceswapStatus, setFaceswapStatus] = useState("");
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -813,6 +823,42 @@ export default function Home() {
     setEditSrc(null);
     setEditResult(null);
     setEditStatus("");
+  }, []);
+
+  const submitFaceswap = useCallback(async () => {
+    if (!faceFile || !targetFile) return;
+    setFaceswapLoading(true);
+    setFaceswapStatus("画像をアップロード中...");
+    setFaceswapResult(null);
+    try {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      formData.append("face_file", faceFile);
+      formData.append("target_file", targetFile);
+      formData.append("workflow_type", faceswapWorkflow);
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/faceswap", { method: "POST", headers, body: formData });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "顔ハメに失敗しました");
+      setFaceswapResult(data.url);
+      setFaceswapStatus("完成！");
+      if (data.credits != null) setCredits(data.credits);
+      void loadHistory();
+    } catch (error) {
+      setFaceswapStatus(error instanceof Error ? error.message : "エラーが発生しました");
+    } finally {
+      setFaceswapLoading(false);
+    }
+  }, [faceFile, targetFile, faceswapWorkflow, getAuthToken, loadHistory]);
+
+  const resetFaceswap = useCallback(() => {
+    setFaceFile(null);
+    setFaceSrc(null);
+    setTargetFile(null);
+    setTargetSrc(null);
+    setFaceswapResult(null);
+    setFaceswapStatus("");
   }, []);
 
   const submitVideo = useCallback(async () => {
@@ -2246,6 +2292,205 @@ export default function Home() {
                     {editLoading ? "編集中..." : "画像編集する"}
                   </button>
                   <button onClick={resetEdit} style={{ ...smallButtonStyle, width: "100%", marginTop: 10 }}>
+                    リセット
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {tab === "faceswap" ? (
+            <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
+              {/* 左カラム：画像アップロード */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* 顔画像 */}
+                <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>顔画像（元の顔）</div>
+                  <label style={uploadButtonStyle}>
+                    顔画像を選択する
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setFaceFile(file);
+                        setFaceSrc(URL.createObjectURL(file));
+                        setFaceswapResult(null);
+                        setFaceswapStatus("");
+                      }}
+                    />
+                  </label>
+                  {/* キャストから選択 */}
+                  {avatars.length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ ...sectionLabelStyle, marginBottom: 8 }}>登録済みキャストから選択</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))", gap: 8 }}>
+                        {avatars.map(avatar => (
+                          <button
+                            key={`face-${avatar.id}`}
+                            onClick={async () => {
+                              if (!avatar.face_image_url || faceswapLoading) return;
+                              try {
+                                const file = await imageUrlToFile(avatar.face_image_url, avatar.name);
+                                setFaceFile(file);
+                                setFaceSrc(URL.createObjectURL(file));
+                                setFaceswapResult(null);
+                                setFaceswapStatus("");
+                              } catch {
+                                setFaceswapStatus("キャスト画像を読み込めませんでした");
+                              }
+                            }}
+                            disabled={!avatar.face_image_url || faceswapLoading}
+                            style={{
+                              padding: 0,
+                              overflow: "hidden",
+                              borderRadius: 8,
+                              border: faceFile && faceSrc === avatar.face_image_url ? "2px solid #b84242" : "1px solid #a89e8e",
+                              background: "rgba(0,0,0,0.06)",
+                              cursor: !avatar.face_image_url || faceswapLoading ? "not-allowed" : "pointer",
+                              opacity: !avatar.face_image_url || faceswapLoading ? 0.5 : 1,
+                            }}
+                          >
+                            <div style={{ aspectRatio: "1 / 1", background: "#111" }}>
+                              {avatar.face_image_url && (
+                                <img src={avatar.face_image_url} alt={avatar.name} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                              )}
+                            </div>
+                            <div style={{ padding: "5px 6px", color: "#111", fontSize: 10, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {avatar.name}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {faceSrc && (
+                    <div style={{ marginTop: 12, borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <img src={faceSrc} alt="顔画像" style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* 体画像 */}
+                <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>体画像（合成先）</div>
+                  <label style={uploadButtonStyle}>
+                    体画像を選択する
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setTargetFile(file);
+                        setTargetSrc(URL.createObjectURL(file));
+                        setFaceswapResult(null);
+                        setFaceswapStatus("");
+                      }}
+                    />
+                  </label>
+                  {targetSrc && (
+                    <div style={{ marginTop: 12, borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)", position: "relative" }}>
+                      <img src={targetSrc} alt="体画像" style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }} />
+                      {faceswapLoading && (
+                        <LoadingExperience label="顔ハメ処理中" detail={faceswapStatus || "合成しています。"} overlay />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 結果 */}
+                {faceswapResult && (
+                  <div style={panelStyle}>
+                    <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>合成結果</div>
+                    <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <img src={faceswapResult} alt="合成結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                      <button
+                        onClick={() => void saveFileAs(faceswapResult, undefined, "faceswap.jpg")}
+                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1 }}
+                      >
+                        ダウンロード
+                      </button>
+                      <button
+                        onClick={() => { handleVideoUpload(targetFile!); setTab("video"); }}
+                        disabled={!targetFile}
+                        style={{ ...smallButtonStyle, flex: 1, background: "#3a3028", color: "#f5f0e8" }}
+                      >
+                        ▶ 動画生成
+                      </button>
+                    </div>
+                    <button onClick={() => setFaceswapResult(null)} style={{ ...smallButtonStyle, width: "100%", marginTop: 8 }}>
+                      結果をクリア
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* 右カラム：設定 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>髪の扱い</div>
+                  <div style={buttonRowStyle}>
+                    <button
+                      onClick={() => setFaceswapWorkflow("target_hair")}
+                      style={choiceButtonStyle(faceswapWorkflow === "target_hair")}
+                    >
+                      体側の髪を残す
+                    </button>
+                    <button
+                      onClick={() => setFaceswapWorkflow("user_hair")}
+                      style={choiceButtonStyle(faceswapWorkflow === "user_hair")}
+                    >
+                      顔側の髪を残す
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
+                    体側の髪を残す：合成先の体の髪型を保持<br />
+                    顔側の髪を残す：顔画像の髪型を保持
+                  </div>
+                </div>
+
+                <div style={panelStyle}>
+                  <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
+                    接続先: easel-ai/advanced-face-swap<br />
+                    料金目安: 約$0.05〜$0.10/枚<br />
+                    2xアップスケール適用済み
+                  </div>
+                </div>
+
+                <div style={panelStyle}>
+                  {faceswapStatus && (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        fontSize: 12,
+                        color: faceswapStatus.includes("失敗") || faceswapStatus.includes("エラー") || faceswapStatus.includes("不足") ? "#e06060" : faceswapStatus === "完成！" ? "#4a8a6a" : "#6a6258",
+                        background: "rgba(0,0,0,0.06)",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                      }}
+                    >
+                      {faceswapStatus}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => void submitFaceswap()}
+                    disabled={!faceFile || !targetFile || faceswapLoading}
+                    style={{
+                      ...actionButtonStyle,
+                      width: "100%",
+                      opacity: !faceFile || !targetFile || faceswapLoading ? 0.5 : 1,
+                      cursor: !faceFile || !targetFile || faceswapLoading ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {faceswapLoading ? "処理中..." : "顔ハメする"}
+                  </button>
+                  <button onClick={resetFaceswap} style={{ ...smallButtonStyle, width: "100%", marginTop: 10 }}>
                     リセット
                   </button>
                 </div>
