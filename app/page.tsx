@@ -9,7 +9,7 @@ type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
-type VideoModel = "grok" | "seedance";
+type VideoModel = "grok" | "grok_v15" | "seedance";
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0";
 type RegisteredAvatar = {
@@ -130,6 +130,29 @@ async function saveFileAs(url: string, sourceName: string | null | undefined, fa
   URL.revokeObjectURL(objectUrl);
 }
 
+function findBlockedMatches(prompt: string, keywords: Array<{ keyword: string; reason: string | null }>) {
+  const lower = prompt.toLowerCase();
+  return keywords.filter(kw => lower.includes(kw.keyword.toLowerCase()));
+}
+
+function BlockedKeywordWarning({ prompt, keywords }: { prompt: string; keywords: Array<{ keyword: string; reason: string | null }> }) {
+  const matches = findBlockedMatches(prompt, keywords);
+  if (matches.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "#3d1a00", border: "1px solid #a04020", color: "#f4a460", fontSize: 12, lineHeight: 1.6 }}>
+      <span style={{ fontWeight: 700 }}>⚠ 注意: </span>
+      生成エラーやアダルトフィルターが発生しやすいキーワードが含まれています。
+      {matches.map((kw, i) => (
+        <span key={i}>
+          {" "}
+          <span style={{ background: "rgba(255,100,0,0.2)", borderRadius: 4, padding: "1px 5px", fontWeight: 700 }}>{kw.keyword}</span>
+          {kw.reason ? <span style={{ color: "#c89060" }}>（{kw.reason}）</span> : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function Home() {
   const [tab, setTab] = useState<TabId>("mosaic");
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
@@ -191,6 +214,8 @@ export default function Home() {
   const [mypagePassword, setMypagePassword] = useState("");
   const [mypageStatus, setMypageStatus] = useState("");
   const [mypageLoading, setMypageLoading] = useState(false);
+
+  const [blockedKeywords, setBlockedKeywords] = useState<Array<{ keyword: string; reason: string | null }>>([]);
 
   const buildRegionBox = useCallback((regions: FaceRegions, area: (typeof AREAS)[number]) => {
     if (area === "目元のみ") {
@@ -875,6 +900,13 @@ export default function Home() {
   useEffect(() => {
     void loadCredits();
   }, [loadCredits]);
+
+  useEffect(() => {
+    fetch("/api/blocked-keywords")
+      .then(r => r.json())
+      .then(data => { if (data.keywords) setBlockedKeywords(data.keywords); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     void loadCurrentUser();
@@ -2021,6 +2053,7 @@ export default function Home() {
                       resize: "vertical",
                     }}
                   />
+                  <BlockedKeywordWarning prompt={editPrompt} keywords={blockedKeywords} />
                 </div>
 
                 <div style={panelStyle}>
@@ -2173,23 +2206,22 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
-                    {(["grok", "seedance"] as VideoModel[]).map(id => (
+                    {(["grok", "grok_v15", "seedance"] as VideoModel[]).map(id => (
                       <button
                         key={id}
-                        onClick={() => {
-                          setVideoModel(id);
-                          setVideoResolution(id === "grok" ? "720p" : "720p");
-                        }}
+                        onClick={() => setVideoModel(id)}
                         style={choiceButtonStyle(videoModel === id)}
                       >
-                        {id === "grok" ? "Grok" : "Seedance 2"}
+                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : "Seedance 2"}
                       </button>
                     ))}
                   </div>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
                     {videoModel === "grok"
                       ? "xAI Grok Imagine — $0.05/s (480p) · $0.07/s (720p)"
-                      : "ByteDance Seedance 2.0 Fast — $0.24/s"}
+                      : videoModel === "grok_v15"
+                        ? "xAI Grok Imagine v1.5 — $0.05/s (480p) · $0.07/s (720p)"
+                        : "ByteDance Seedance 2.0 Fast — $0.24/s"}
                   </div>
                 </div>
 
@@ -2211,6 +2243,7 @@ export default function Home() {
                       resize: "vertical",
                     }}
                   />
+                  <BlockedKeywordWarning prompt={videoPrompt} keywords={blockedKeywords} />
                 </div>
 
                 <div style={panelStyle}>
