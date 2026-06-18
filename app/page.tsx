@@ -187,7 +187,7 @@ export default function Home() {
   const [faceSrc, setFaceSrc] = useState<string | null>(null);
   const [targetFile, setTargetFile] = useState<File | null>(null);
   const [targetSrc, setTargetSrc] = useState<string | null>(null);
-  const [faceswapWorkflow, setFaceswapWorkflow] = useState<"target_hair" | "user_hair">("target_hair");
+  const [faceswapWorkflow, setFaceswapWorkflow] = useState<"target_hair" | "user_hair">("user_hair");
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
@@ -2437,14 +2437,14 @@ export default function Home() {
                   <div style={sectionLabelStyle}>髪の扱い</div>
                   <div style={buttonRowStyle}>
                     <button
-                      onClick={() => setFaceswapWorkflow("target_hair")}
-                      style={choiceButtonStyle(faceswapWorkflow === "target_hair")}
+                      onClick={() => setFaceswapWorkflow("user_hair")}
+                      style={choiceButtonStyle(faceswapWorkflow === "user_hair")}
                     >
                       体側の髪を残す
                     </button>
                     <button
-                      onClick={() => setFaceswapWorkflow("user_hair")}
-                      style={choiceButtonStyle(faceswapWorkflow === "user_hair")}
+                      onClick={() => setFaceswapWorkflow("target_hair")}
+                      style={choiceButtonStyle(faceswapWorkflow === "target_hair")}
                     >
                       顔側の髪を残す
                     </button>
