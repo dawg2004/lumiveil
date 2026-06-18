@@ -2053,6 +2053,27 @@ export default function Home() {
                         結果をクリア
                       </button>
                     </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const filename = editResult.split("/").pop() ?? "edit.jpg";
+                          const file = await imageUrlToFile(editResult, filename);
+                          handleVideoUpload(file);
+                          setTab("video");
+                        } catch {
+                          // ignore
+                        }
+                      }}
+                      style={{
+                        ...smallButtonStyle,
+                        marginTop: 8,
+                        width: "100%",
+                        background: "#3a3028",
+                        color: "#f5f0e8",
+                      }}
+                    >
+                      ▶ 動画生成
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -2355,6 +2376,23 @@ export default function Home() {
                 style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 120 }}
               >
                 保存
+              </button>
+              <button
+                onClick={async () => {
+                  if (!mosaicImage) return;
+                  try {
+                    const filename = mosaicImage.startsWith("blob:") ? "mosaic.png" : (mosaicImage.split("/").pop() ?? "mosaic.png");
+                    const file = await imageUrlToFile(mosaicImage, filename);
+                    handleVideoUpload(file);
+                    setMosaicImage(null);
+                    setTab("video");
+                  } catch {
+                    // ignore
+                  }
+                }}
+                style={{ ...smallButtonStyle, minWidth: 120, background: "#3a3028", color: "#f5f0e8" }}
+              >
+                ▶ 動画生成
               </button>
               <button onClick={() => setMosaicImage(null)} style={{ ...smallButtonStyle, minWidth: 120 }}>
                 閉じる
