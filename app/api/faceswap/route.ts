@@ -7,7 +7,7 @@ import { uploadToStorage } from "@/lib/upload-to-storage";
 export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
-const FACE_SWAP_MODEL = "easel-ai/advanced-face-swap";
+const FACE_SWAP_MODEL = "fal-ai/face-swap";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
 function createBearerSupabaseClient(token: string) {
@@ -119,7 +119,6 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const faceFile = formData.get("face_file");
     const targetFile = formData.get("target_file");
-    const workflowType = String(formData.get("workflow_type") ?? "target_hair");
 
     if (!(faceFile instanceof File) || !(targetFile instanceof File)) {
       return NextResponse.json({ error: "face_file と target_file の両方が必要です" }, { status: 400 });
@@ -133,12 +132,11 @@ export async function POST(req: NextRequest) {
       uploadToFal(targetFile),
     ]);
 
+    // fal-ai/face-swap: base_image_url=体(合成先), swap_image_url=顔
     const result = await fal.subscribe(FACE_SWAP_MODEL, {
       input: {
-        face_image_0: faceUrl,
-        target_image: targetUrl,
-        workflow_type: workflowType,
-        upscale: true,
+        base_image_url: targetUrl,
+        swap_image_url: faceUrl,
       },
     });
 
