@@ -14,7 +14,8 @@ function createAdminSupabaseClient() {
 }
 
 const MODEL_IDS: Record<string, string> = {
-  grok: "xai/grok-imagine-video/v1.5/image-to-video",
+  grok: "xai/grok-imagine-video/image-to-video",
+  grok_v15: "xai/grok-imagine-video/v1.5/image-to-video",
   seedance: "bytedance/seedance-2.0/fast/image-to-video",
 };
 
@@ -97,7 +98,7 @@ async function saveVideoHistory({
 
   const historyPrompt = encodeHistoryPrompt({
     kind: "video",
-    prompt: `${model === "seedance" ? "Seedance動画" : "Grok動画"}: ${prompt}`,
+    prompt: `${model === "seedance" ? "Seedance動画" : model === "grok_v15" ? "Grok v1.5動画" : "Grok動画"}: ${prompt}`,
     url: videoUrl,
   });
 

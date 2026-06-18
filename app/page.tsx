@@ -9,7 +9,7 @@ type TabId = "generate" | "avatar" | "mosaic" | "edit" | "video" | "history" | "
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
-type VideoModel = "grok" | "seedance";
+type VideoModel = "grok" | "grok_v15" | "seedance";
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0";
 type RegisteredAvatar = {
@@ -2188,23 +2188,22 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
-                    {(["grok", "seedance"] as VideoModel[]).map(id => (
+                    {(["grok", "grok_v15", "seedance"] as VideoModel[]).map(id => (
                       <button
                         key={id}
-                        onClick={() => {
-                          setVideoModel(id);
-                          setVideoResolution(id === "grok" ? "720p" : "720p");
-                        }}
+                        onClick={() => setVideoModel(id)}
                         style={choiceButtonStyle(videoModel === id)}
                       >
-                        {id === "grok" ? "Grok" : "Seedance 2"}
+                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : "Seedance 2"}
                       </button>
                     ))}
                   </div>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
                     {videoModel === "grok"
                       ? "xAI Grok Imagine — $0.05/s (480p) · $0.07/s (720p)"
-                      : "ByteDance Seedance 2.0 Fast — $0.24/s"}
+                      : videoModel === "grok_v15"
+                        ? "xAI Grok Imagine v1.5 — $0.05/s (480p) · $0.07/s (720p)"
+                        : "ByteDance Seedance 2.0 Fast — $0.24/s"}
                   </div>
                 </div>
 
