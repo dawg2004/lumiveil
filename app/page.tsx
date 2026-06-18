@@ -33,7 +33,7 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "generate", label: "画像生成（工事中）", mobileLabel: "生成" },
   { id: "avatar", label: "キャスト登録", mobileLabel: "キャスト" },
   { id: "mosaic", label: "モザイク", mobileLabel: "モザイク" },
-  { id: "edit", label: "AI編集", mobileLabel: "編集" },
+  { id: "edit", label: "画像編集", mobileLabel: "編集" },
   { id: "video", label: "動画生成", mobileLabel: "動画" },
   { id: "history", label: "履歴", mobileLabel: "履歴" },
   { id: "plan", label: "プラン", mobileLabel: "プラン" },
@@ -1405,7 +1405,7 @@ export default function Home() {
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 500, color: "#171717", marginBottom: 6 }}>クレジットチャージ</div>
                     <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
-                      画像生成、AI編集、動画生成、キャスト登録に使うクレジットを追加できます。
+                      画像生成、画像編集、動画生成、キャスト登録に使うクレジットを追加できます。
                       目安は写真1枚あたり約{PHOTO_CREDITS_ESTIMATE}クレジット、動画1本あたり約{VIDEO_CREDITS_ESTIMATE}クレジットです。
                     </div>
                   </div>
@@ -2102,7 +2102,7 @@ export default function Home() {
                       cursor: !editFile || !editPrompt.trim() || editLoading ? "not-allowed" : "pointer",
                     }}
                   >
-                    {editLoading ? "編集中..." : "AI編集する"}
+                    {editLoading ? "編集中..." : "画像編集する"}
                   </button>
                   <button onClick={resetEdit} style={{ ...smallButtonStyle, width: "100%", marginTop: 10 }}>
                     リセット

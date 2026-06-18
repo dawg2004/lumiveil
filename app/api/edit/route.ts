@@ -133,7 +133,7 @@ async function saveGenerationHistory(adminClient: SupabaseClient, userId: string
     avatar_id: null,
     prompt: encodeHistoryPrompt({
       kind: "image",
-      prompt: `AI編集: ${prompt}`,
+      prompt: `画像編集: ${prompt}`,
       url: generatedUrl,
     }),
     image_urls: [generatedUrl],
