@@ -2271,8 +2271,8 @@ export default function Home() {
                     {videoModel === "grok"
                       ? "xAI Grok Imagine — $0.05/s (480p) · $0.07/s (720p)"
                       : videoModel === "grok_v15"
-                        ? "xAI Grok Imagine v1.5 — $0.05/s (480p) · $0.07/s (720p)"
-                        : "ByteDance Seedance 2.0 Fast — $0.24/s"}
+                        ? "xAI Grok Imagine v1.5 — $0.08/s (480p) · $0.14/s (720p)"
+                        : "ByteDance Seedance 2.0 Fast — $0.2419/s · Standard — $0.3024/s"}
                   </div>
                 </div>
 
@@ -2347,7 +2347,13 @@ export default function Home() {
                     {videoLoading ? "生成中..." : "動画を生成する"}
                   </button>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", textAlign: "center" }}>
-                    推定コスト: ${(videoDuration * (videoModel === "grok" ? (videoResolution === "480p" ? 0.05 : 0.07) : 0.242)).toFixed(2)}
+                    推定コスト: ${(videoDuration * (
+                      videoModel === "grok"
+                        ? (videoResolution === "480p" ? 0.05 : 0.07)
+                        : videoModel === "grok_v15"
+                          ? (videoResolution === "480p" ? 0.08 : 0.14)
+                          : 0.2419
+                    )).toFixed(2)}
                   </div>
                 </div>
               </div>
