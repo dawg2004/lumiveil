@@ -228,9 +228,14 @@ export async function POST(req: NextRequest) {
       try {
         detectedHair = await detectHairFromImage(faceUrl);
 
+        // swappedUrlをfal storageに再アップロードしてpublicなURLを確保
+        const swappedBlob = await fetch(swappedUrl).then(r => r.blob());
+        const swappedFile = new File([swappedBlob], "swapped.jpg", { type: "image/jpeg" });
+        const swappedFalUrl = await uploadToFal(swappedFile);
+
         const hairResult = await fal.subscribe(HAIR_CHANGE_MODEL, {
           input: {
-            image_url: swappedUrl,
+            image_url: swappedFalUrl,
             target_hairstyle: detectedHair.hairstyle,
             hair_color: detectedHair.hairColor,
           },
