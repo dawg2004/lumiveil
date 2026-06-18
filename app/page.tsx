@@ -191,12 +191,20 @@ export default function Home() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoResult, setVideoResult] = useState<string | null>(null);
   const [videoRequestId, setVideoRequestId] = useState<string | null>(null);
+  const [videoRequestId2, setVideoRequestId2] = useState<string | null>(null);
   const [videoStatus, setVideoStatus] = useState("");
   const videoPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoPollRef2 = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoPollErrorCountRef = useRef(0);
+  const videoPollErrorCountRef2 = useRef(0);
   const lastSavedEditResultRef = useRef<string | null>(null);
   const lastSavedVideoResultRef = useRef<string | null>(null);
   const paypalCaptureStartedRef = useRef(false);
+  // stitch mode (Grok v1.5 限定: 15秒×2本を連続生成して30秒として再生)
+  const [videoStitchMode, setVideoStitchMode] = useState(false);
+  const [videoStitchPart1, setVideoStitchPart1] = useState<string | null>(null);
+  const [videoStitchPart2, setVideoStitchPart2] = useState<string | null>(null);
+  const [videoStitchStatus, setVideoStitchStatus] = useState("");
   const [credits, setCredits] = useState<number | null>(null);
   const [topupLoadingPack, setTopupLoadingPack] = useState<TopupPackId | null>(null);
   const [topupStatus, setTopupStatus] = useState("");
@@ -810,8 +818,12 @@ export default function Home() {
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
     setVideoLoading(true);
+    setVideoStitchPart1(null);
+    setVideoStitchPart2(null);
+    setVideoStitchStatus("");
     setVideoStatus("画像をアップロード中...");
     videoPollErrorCountRef.current = 0;
+    videoPollErrorCountRef2.current = 0;
     try {
       const formData = new FormData();
       formData.append("file", videoFile);
@@ -823,12 +835,27 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "提出に失敗しました");
       setVideoRequestId(data.requestId);
-      setVideoStatus("生成キューに追加しました。しばらくお待ちください...");
+      if (videoStitchMode && videoModel === "grok_v15") {
+        // 2本目も同時投入
+        const formData2 = new FormData();
+        formData2.append("file", videoFile);
+        formData2.append("model", videoModel);
+        formData2.append("prompt", videoPrompt);
+        formData2.append("duration", String(videoDuration));
+        formData2.append("resolution", videoResolution);
+        const res2 = await fetch("/api/video", { method: "POST", body: formData2 });
+        const data2 = await res2.json();
+        if (!res2.ok || data2.error) throw new Error(data2.error ?? "2本目の提出に失敗しました");
+        setVideoRequestId2(data2.requestId);
+        setVideoStatus("30秒動画を生成中（2本同時生成）...");
+      } else {
+        setVideoStatus("生成キューに追加しました。しばらくお待ちください...");
+      }
     } catch (error) {
       setVideoStatus(error instanceof Error ? error.message : "エラーが発生しました");
       setVideoLoading(false);
     }
-  }, [videoDuration, videoFile, videoModel, videoPrompt, videoResolution]);
+  }, [videoDuration, videoFile, videoModel, videoPrompt, videoResolution, videoStitchMode]);
 
   useEffect(() => {
     if (!videoRequestId) return;
@@ -850,11 +877,17 @@ export default function Home() {
         if (data.status === "completed") {
           clearInterval(videoPollRef.current!);
           setVideoRequestId(null);
-          setVideoResult(data.videoUrl);
-          lastSavedVideoResultRef.current = data.videoUrl;
-          void loadHistory();
-          setVideoLoading(false);
-          setVideoStatus("完成！");
+          if (videoStitchMode && videoModel === "grok_v15") {
+            setVideoStitchPart1(data.videoUrl);
+            setVideoStitchStatus(prev => prev === "part2_done" ? "both_done" : "part1_done");
+            setVideoStatus("1本目完成！2本目を待機中...");
+          } else {
+            setVideoResult(data.videoUrl);
+            lastSavedVideoResultRef.current = data.videoUrl;
+            void loadHistory();
+            setVideoLoading(false);
+            setVideoStatus("完成！");
+          }
         } else if (data.status === "failed") {
           clearInterval(videoPollRef.current!);
           setVideoRequestId(null);
@@ -885,6 +918,63 @@ export default function Home() {
     videoPollRef.current = setInterval(() => void pollVideoStatus(), 5000);
     return () => { if (videoPollRef.current) clearInterval(videoPollRef.current); };
   }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory]);
+
+  // stitch 2本目ポーリング
+  useEffect(() => {
+    if (!videoRequestId2) return;
+    const modelId = videoModel;
+    const pollVideo2 = async () => {
+      try {
+        const params = new URLSearchParams({
+          requestId: videoRequestId2,
+          model: modelId,
+          prompt: videoPrompt,
+          duration: String(videoDuration),
+          resolution: videoResolution,
+        });
+        const res = await fetch(`/api/video?${params.toString()}`);
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error ?? "2本目の状態確認に失敗しました");
+        videoPollErrorCountRef2.current = 0;
+        if (data.status === "completed") {
+          clearInterval(videoPollRef2.current!);
+          setVideoRequestId2(null);
+          setVideoStitchPart2(data.videoUrl);
+          setVideoStitchStatus(prev => prev === "part1_done" ? "both_done" : "part2_done");
+        } else {
+          const pos = (data as { queue_position?: number }).queue_position;
+          const falStatus = (data as { falStatus?: string }).falStatus;
+          setVideoStatus(
+            pos != null
+              ? `30秒動画を生成中... 2本目 (キュー: ${pos})`
+              : falStatus === "IN_PROGRESS"
+                ? "30秒動画を生成中... 2本目処理中"
+                : "30秒動画を生成中..."
+          );
+        }
+      } catch (error) {
+        videoPollErrorCountRef2.current += 1;
+        if (videoPollErrorCountRef2.current >= 2) {
+          clearInterval(videoPollRef2.current!);
+          setVideoRequestId2(null);
+          setVideoLoading(false);
+          setVideoStatus(error instanceof Error ? error.message : "2本目の生成に失敗しました");
+        }
+      }
+    };
+    void pollVideo2();
+    videoPollRef2.current = setInterval(() => void pollVideo2(), 5000);
+    return () => { if (videoPollRef2.current) clearInterval(videoPollRef2.current); };
+  }, [videoDuration, videoModel, videoPrompt, videoRequestId2, videoResolution]);
+
+  // stitch: 両方完了したらloadingを解除
+  useEffect(() => {
+    if (videoStitchStatus === "both_done" || (videoStitchPart1 && videoStitchPart2 && !videoRequestId && !videoRequestId2)) {
+      setVideoLoading(false);
+      setVideoStatus("完成！（30秒 2本連続再生）");
+      void loadHistory();
+    }
+  }, [videoStitchPart1, videoStitchPart2, videoRequestId, videoRequestId2, videoStitchStatus, loadHistory]);
 
   useEffect(() => {
     if (tab === "avatar" || tab === "mosaic" || tab === "video") {
@@ -2251,6 +2341,45 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+
+                {/* stitch 30秒プレーヤー */}
+                {(videoStitchPart1 || videoStitchPart2) && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>
+                      30秒動画（{videoStitchPart1 && videoStitchPart2 ? "2本完成" : videoStitchPart1 ? "1本目完成・2本目生成中" : "2本目完成・1本目生成中"}）
+                    </div>
+                    {videoStitchPart1 && (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: "#6a6258", marginBottom: 4 }}>1本目（0〜15秒）</div>
+                        <video src={videoStitchPart1} controls style={{ width: "100%", borderRadius: 10, background: "#000" }} />
+                        <button
+                          onClick={() => void saveFileAs(videoStitchPart1, undefined, "video_part1.mp4")}
+                          style={{ ...smallButtonStyle, width: "100%", marginTop: 6 }}
+                        >
+                          1本目を保存
+                        </button>
+                      </div>
+                    )}
+                    {videoStitchPart2 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: "#6a6258", marginBottom: 4 }}>2本目（15〜30秒）</div>
+                        <video src={videoStitchPart2} controls style={{ width: "100%", borderRadius: 10, background: "#000" }} />
+                        <button
+                          onClick={() => void saveFileAs(videoStitchPart2, undefined, "video_part2.mp4")}
+                          style={{ ...smallButtonStyle, width: "100%", marginTop: 6 }}
+                        >
+                          2本目を保存
+                        </button>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => { setVideoStitchPart1(null); setVideoStitchPart2(null); setVideoStitchStatus(""); setVideoStatus(""); }}
+                      style={{ ...smallButtonStyle, width: "100%", marginTop: 10 }}
+                    >
+                      クリア
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -2260,7 +2389,13 @@ export default function Home() {
                     {(["grok", "grok_v15", "seedance"] as VideoModel[]).map(id => (
                       <button
                         key={id}
-                        onClick={() => setVideoModel(id)}
+                        onClick={() => {
+                          setVideoModel(id);
+                          // Grokは最大10秒なので15秒選択中なら10秒に戻す
+                          if (id === "grok" && videoDuration === 15) setVideoDuration(10);
+                          // Grok以外に切り替えたらstitchモードをリセット
+                          if (id !== "grok_v15") setVideoStitchMode(false);
+                        }}
                         style={choiceButtonStyle(videoModel === id)}
                       >
                         {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : "Seedance 2"}
@@ -2300,12 +2435,45 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>尺</div>
                   <div style={buttonRowStyle}>
-                    {[5, 10, 15].map(d => (
-                      <button key={d} onClick={() => setVideoDuration(d)} style={choiceButtonStyle(videoDuration === d)}>
-                        {d}秒
-                      </button>
-                    ))}
+                    {[5, 10, 15].map(d => {
+                      const disabled = videoModel === "grok" && d === 15;
+                      return (
+                        <button
+                          key={d}
+                          disabled={disabled}
+                          onClick={() => !disabled && setVideoDuration(d)}
+                          style={{
+                            ...choiceButtonStyle(videoDuration === d),
+                            opacity: disabled ? 0.35 : 1,
+                            cursor: disabled ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {d}秒{disabled ? " ✕" : ""}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {videoModel === "grok" && (
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#9b8060" }}>Grokは最大10秒まで</div>
+                  )}
+                  {videoModel === "grok_v15" && videoDuration === 15 && (
+                    <div style={{ marginTop: 10 }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "#4a3a28" }}>
+                        <input
+                          type="checkbox"
+                          checked={videoStitchMode}
+                          onChange={e => setVideoStitchMode(e.target.checked)}
+                          style={{ width: 14, height: 14, accentColor: "#b84242" }}
+                        />
+                        <span>30秒モード（15秒×2本を連続生成）</span>
+                      </label>
+                      {videoStitchMode && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: "#6a6258" }}>
+                          同じ画像・プロンプトで2本生成してシームレスに再生します。推定コスト×2。
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div style={panelStyle}>
