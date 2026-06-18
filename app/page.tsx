@@ -2457,7 +2457,7 @@ export default function Home() {
 
                 <div style={panelStyle}>
                   <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
-                    接続先: easel-ai/advanced-face-swap<br />
+                    接続先: fal-ai/face-swap<br />
                     料金目安: 約$0.05〜$0.10/枚<br />
                     2xアップスケール適用済み
                   </div>
