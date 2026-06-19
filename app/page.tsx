@@ -947,6 +947,19 @@ export default function Home() {
     }
   }, [analyzeResult, handleVideoUpload]);
 
+  const useEditResultForFurtherEdit = useCallback(async () => {
+    if (!editResult) return;
+    try {
+      const resp = await fetch(editResult);
+      const blob = await resp.blob();
+      const file = new File([blob], "edit-result.jpg", { type: blob.type || "image/jpeg" });
+      handleEditUpload(file);
+      setEditStatus("編集結果を読み込みました。プロンプトを変えて再編集できます。");
+    } catch {
+      setEditStatus("画像の読み込みに失敗しました");
+    }
+  }, [editResult, handleEditUpload]);
+
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
     setVideoLoading(true);
@@ -2397,6 +2410,12 @@ export default function Home() {
                       <img src={editResult} alt="編集後" style={{ width: "100%", maxHeight: 460, objectFit: "contain", display: "block" }} />
                     </div>
                     <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => void useEditResultForFurtherEdit()}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
+                      >
+                        追加編集
+                      </button>
                       <button
                         onClick={() => void saveFileAs(editResult, editFile?.name, "grok-edit.jpg")}
                         style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1, minWidth: 100 }}
