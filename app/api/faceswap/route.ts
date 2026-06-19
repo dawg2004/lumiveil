@@ -129,12 +129,23 @@ async function detectHairWithMoondream(imageUrl: string): Promise<{ styleText: s
       ],
     },
   });
-  const data = result.data as { outputs?: string[] };
+  const data = result.data as { outputs?: unknown[] };
   const outputs = Array.isArray(data.outputs) ? data.outputs : [];
-  return {
-    styleText: outputs[0] ?? "",
-    colorText: outputs[1] ?? "",
+
+  const extractText = (item: unknown): string => {
+    if (typeof item === "string") return item;
+    if (item && typeof item === "object") {
+      const obj = item as Record<string, unknown>;
+      return String(obj.output ?? obj.text ?? obj.answer ?? "");
+    }
+    return "";
   };
+
+  const styleText = extractText(outputs[0]);
+  const colorText = extractText(outputs[1]);
+  console.log("Moondream raw outputs:", JSON.stringify(outputs));
+  console.log("Parsed style/color:", { styleText, colorText });
+  return { styleText, colorText };
 }
 
 // 回答テキストからenum値にマッピング
@@ -238,6 +249,7 @@ export async function POST(req: NextRequest) {
 
     // Step 3: 髪型マッチング（オプション）
     let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum } | null = null;
+    let hairError: string | null = null;
     if (applyHair) {
       try {
         // Step 3a: moondreamで髪型・髪色を検出（1回のbatchedコール）
@@ -265,9 +277,13 @@ export async function POST(req: NextRequest) {
         const hairUrl = hairData.images?.[0]?.url;
         if (hairUrl) {
           finalUrl = hairUrl;
+        } else {
+          hairError = "hair-changeの結果画像が取得できませんでした";
+          console.error("Hair change returned no image:", JSON.stringify(hairData));
         }
       } catch (err) {
         // 髪型変更が失敗しても顔ハメ結果は返す
+        hairError = getErrorMessage(err);
         const detail = err instanceof Error
           ? { name: err.name, message: err.message, cause: err.cause }
           : String(err);
@@ -290,6 +306,7 @@ export async function POST(req: NextRequest) {
       url: finalUrl,
       credits,
       detectedHair,
+      hairError,
     });
   } catch (error) {
     const msg = getErrorMessage(error);

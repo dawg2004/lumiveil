@@ -846,7 +846,13 @@ export default function Home() {
       if (!res.ok || data.error) throw new Error(data.error ?? "顔ハメに失敗しました");
       setFaceswapResult(data.url);
       if (data.detectedHair) setFaceswapDetectedHair(data.detectedHair);
-      setFaceswapStatus("完成！");
+      if (data.hairError) {
+        setFaceswapStatus(`完成（髪型マッチング失敗: ${data.hairError}）`);
+      } else if (faceswapApplyHair && data.detectedHair) {
+        setFaceswapStatus("完成！（髪型マッチング適用済み）");
+      } else {
+        setFaceswapStatus("完成！");
+      }
       if (data.credits != null) setCredits(data.credits);
       void loadHistory();
     } catch (error) {
