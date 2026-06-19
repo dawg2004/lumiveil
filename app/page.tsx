@@ -894,21 +894,20 @@ export default function Home() {
   }, [analyzeFile, getAuthToken]);
 
   const submitTextToImage = useCallback(async () => {
-    if (!analyzePrompt.trim()) return;
+    if (!analyzePrompt.trim() || !analyzeFile) return;
     setAnalyzeGenLoading(true);
-    setAnalyzeStatus("画像生成中...");
+    setAnalyzeStatus("画像を編集中...");
     setAnalyzeResult(null);
     try {
       const token = await getAuthToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const formData = new FormData();
+      formData.append("file", analyzeFile);
+      formData.append("prompt", analyzePrompt);
+      const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      const res = await fetch("/api/text-to-image", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ prompt: analyzePrompt }),
-      });
+      const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? "画像生成に失敗しました");
+      if (!res.ok || data.error) throw new Error(data.error ?? "画像編集に失敗しました");
       setAnalyzeResult(data.url);
       setAnalyzeStatus("完成！");
       if (data.credits != null) setCredits(data.credits);
@@ -918,7 +917,22 @@ export default function Home() {
     } finally {
       setAnalyzeGenLoading(false);
     }
-  }, [analyzePrompt, getAuthToken, loadHistory]);
+  }, [analyzePrompt, analyzeFile, getAuthToken, loadHistory]);
+
+  const useResultForFurtherEdit = useCallback(async () => {
+    if (!analyzeResult) return;
+    try {
+      const resp = await fetch(analyzeResult);
+      const blob = await resp.blob();
+      const file = new File([blob], "edited-result.jpg", { type: blob.type || "image/jpeg" });
+      setAnalyzeFile(file);
+      setAnalyzeSrc(analyzeResult);
+      setAnalyzeResult(null);
+      setAnalyzeStatus("編集結果を読み込みました。プロンプトを変更して再編集できます。");
+    } catch {
+      setAnalyzeStatus("画像の読み込みに失敗しました");
+    }
+  }, [analyzeResult]);
 
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
@@ -1415,7 +1429,28 @@ export default function Home() {
 
               {/* 生成プロンプト */}
               <div style={panelStyle}>
-                <div style={sectionLabelStyle}>生成プロンプト（編集可）</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={sectionLabelStyle}>生成プロンプト（編集可）</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "#9b8c5a", padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(155,140,90,0.4)", background: "rgba(155,140,90,0.08)" }}>
+                    {analyzeSrc
+                      ? <img src={analyzeSrc} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4 }} />
+                      : <span style={{ fontSize: 16 }}>＋</span>}
+                    画像を選択
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setAnalyzeFile(file);
+                        setAnalyzeSrc(URL.createObjectURL(file));
+                        setAnalyzeResult(null);
+                        setAnalyzeStatus("");
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   value={analyzePrompt}
                   onChange={e => setAnalyzePrompt(e.target.value)}
@@ -1449,26 +1484,34 @@ export default function Home() {
                 )}
                 <button
                   onClick={() => void submitTextToImage()}
-                  disabled={!analyzePrompt.trim() || analyzeGenLoading}
-                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !analyzePrompt.trim() || analyzeGenLoading ? 0.5 : 1, cursor: !analyzePrompt.trim() || analyzeGenLoading ? "not-allowed" : "pointer" }}
+                  disabled={!analyzePrompt.trim() || !analyzeFile || analyzeGenLoading}
+                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !analyzePrompt.trim() || !analyzeFile || analyzeGenLoading ? 0.5 : 1, cursor: !analyzePrompt.trim() || !analyzeFile || analyzeGenLoading ? "not-allowed" : "pointer" }}
                 >
-                  {analyzeGenLoading ? "生成中..." : "② 画像を生成（1クレジット）"}
+                  {analyzeGenLoading ? "編集中..." : "② 画像を編集（1クレジット）"}
                 </button>
               </div>
 
-              {/* 生成結果 */}
+              {/* 編集結果 */}
               {analyzeResult && (
                 <div style={panelStyle}>
-                  <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>生成結果</div>
+                  <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>編集結果</div>
                   <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <img src={analyzeResult} alt="生成結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
+                    <img src={analyzeResult} alt="編集結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
                   </div>
-                  <button
-                    onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
-                    style={{ ...actionButtonStyle, width: "100%", marginTop: 10 }}
-                  >
-                    ダウンロード
-                  </button>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => void useResultForFurtherEdit()}
+                      style={{ ...actionButtonStyle, flex: 1 }}
+                    >
+                      この結果をベースに追加編集
+                    </button>
+                    <button
+                      onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
+                      style={{ ...actionButtonStyle, flex: 1 }}
+                    >
+                      ダウンロード
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
