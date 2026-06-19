@@ -1429,7 +1429,28 @@ export default function Home() {
 
               {/* 生成プロンプト */}
               <div style={panelStyle}>
-                <div style={sectionLabelStyle}>生成プロンプト（編集可）</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={sectionLabelStyle}>生成プロンプト（編集可）</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "#9b8c5a", padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(155,140,90,0.4)", background: "rgba(155,140,90,0.08)" }}>
+                    {analyzeSrc
+                      ? <img src={analyzeSrc} alt="" style={{ width: 28, height: 28, objectFit: "cover", borderRadius: 4 }} />
+                      : <span style={{ fontSize: 16 }}>＋</span>}
+                    画像を選択
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setAnalyzeFile(file);
+                        setAnalyzeSrc(URL.createObjectURL(file));
+                        setAnalyzeResult(null);
+                        setAnalyzeStatus("");
+                      }}
+                    />
+                  </label>
+                </div>
                 <textarea
                   value={analyzePrompt}
                   onChange={e => setAnalyzePrompt(e.target.value)}
