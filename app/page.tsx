@@ -2780,7 +2780,7 @@ export default function Home() {
                     />
                     <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
                       <button
-                        onClick={() => void saveFileAs(videoResult, videoFile?.name, "video.mp4")}
+                        onClick={() => void saveFileAs(videoResult, undefined, "video.mp4")}
                         style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1 }}
                       >
                         ダウンロード
