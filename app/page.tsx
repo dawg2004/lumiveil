@@ -5,7 +5,7 @@ import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { createClient } from "@/lib/supabase";
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 
-type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "history" | "plan" | "mypage";
+type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage";
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
@@ -36,6 +36,7 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "edit", label: "画像編集", mobileLabel: "編集" },
   { id: "faceswap", label: "顔ハメ", mobileLabel: "顔ハメ" },
   { id: "video", label: "動画生成", mobileLabel: "動画" },
+  { id: "analyze", label: "AI変換", mobileLabel: "変換" },
   { id: "history", label: "履歴", mobileLabel: "履歴" },
   { id: "plan", label: "プラン", mobileLabel: "プラン" },
   { id: "mypage", label: "マイページ", mobileLabel: "設定" },
@@ -190,8 +191,14 @@ export default function Home() {
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
-  const [faceswapApplyHair, setFaceswapApplyHair] = useState(true);
-  const [faceswapDetectedHair, setFaceswapDetectedHair] = useState<{ hairstyle: string; hairColor: string; rawStyle?: string; rawColor?: string } | null>(null);
+  // analyze
+  const [analyzeFile, setAnalyzeFile] = useState<File | null>(null);
+  const [analyzeSrc, setAnalyzeSrc] = useState<string | null>(null);
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const [analyzePrompt, setAnalyzePrompt] = useState("");
+  const [analyzeGenLoading, setAnalyzeGenLoading] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
+  const [analyzeStatus, setAnalyzeStatus] = useState("");
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -829,30 +836,21 @@ export default function Home() {
   const submitFaceswap = useCallback(async () => {
     if (!faceFile || !targetFile) return;
     setFaceswapLoading(true);
-    setFaceswapDetectedHair(null);
-    setFaceswapStatus(faceswapApplyHair ? "画像をアップロード中...（髪型マッチング込み）" : "画像をアップロード中...");
+    setFaceswapStatus("画像をアップロード中...");
     setFaceswapResult(null);
     try {
       const token = await getAuthToken();
       const formData = new FormData();
       formData.append("face_file", faceFile);
       formData.append("target_file", targetFile);
-      formData.append("apply_hair", String(faceswapApplyHair));
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
-      setFaceswapStatus(faceswapApplyHair ? "顔ハメ + 髪型解析中..." : "顔ハメ処理中...");
+      setFaceswapStatus("顔ハメ処理中...");
       const res = await fetch("/api/faceswap", { method: "POST", headers, body: formData });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "顔ハメに失敗しました");
       setFaceswapResult(data.url);
-      if (data.detectedHair) setFaceswapDetectedHair(data.detectedHair);
-      if (data.hairError) {
-        setFaceswapStatus(`完成（髪型マッチング失敗: ${data.hairError}）`);
-      } else if (faceswapApplyHair && data.detectedHair) {
-        setFaceswapStatus("完成！（髪型マッチング適用済み）");
-      } else {
-        setFaceswapStatus("完成！");
-      }
+      setFaceswapStatus("完成！");
       if (data.credits != null) setCredits(data.credits);
       void loadHistory();
     } catch (error) {
@@ -860,7 +858,7 @@ export default function Home() {
     } finally {
       setFaceswapLoading(false);
     }
-  }, [faceFile, targetFile, faceswapApplyHair, getAuthToken, loadHistory]);
+  }, [faceFile, targetFile, getAuthToken, loadHistory]);
 
   const resetFaceswap = useCallback(() => {
     setFaceFile(null);
@@ -870,6 +868,57 @@ export default function Home() {
     setFaceswapResult(null);
     setFaceswapStatus("");
   }, []);
+
+  const submitAnalyze = useCallback(async () => {
+    if (!analyzeFile) return;
+    setAnalyzeLoading(true);
+    setAnalyzeStatus("画像を解析中...");
+    setAnalyzePrompt("");
+    setAnalyzeResult(null);
+    try {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      formData.append("image_file", analyzeFile);
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/analyze-image", { method: "POST", headers, body: formData });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "解析に失敗しました");
+      setAnalyzePrompt(data.prompt);
+      setAnalyzeStatus("プロンプト生成完了！内容を確認・編集して「画像生成」を押してください。");
+    } catch (error) {
+      setAnalyzeStatus(error instanceof Error ? error.message : "エラーが発生しました");
+    } finally {
+      setAnalyzeLoading(false);
+    }
+  }, [analyzeFile, getAuthToken]);
+
+  const submitTextToImage = useCallback(async () => {
+    if (!analyzePrompt.trim()) return;
+    setAnalyzeGenLoading(true);
+    setAnalyzeStatus("画像生成中...");
+    setAnalyzeResult(null);
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/text-to-image", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ prompt: analyzePrompt }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "画像生成に失敗しました");
+      setAnalyzeResult(data.url);
+      setAnalyzeStatus("完成！");
+      if (data.credits != null) setCredits(data.credits);
+      void loadHistory();
+    } catch (error) {
+      setAnalyzeStatus(error instanceof Error ? error.message : "エラーが発生しました");
+    } finally {
+      setAnalyzeGenLoading(false);
+    }
+  }, [analyzePrompt, getAuthToken, loadHistory]);
 
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
@@ -1327,6 +1376,103 @@ export default function Home() {
                 "この画面は順次移植中です。まずはモザイク機能を安定させ、MediaPipe Face Landmarker と微調整UIを優先しています。"
               )
             : null}
+
+          {tab === "analyze" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* 画像アップロード */}
+              <div style={panelStyle}>
+                <div style={sectionLabelStyle}>解析する画像</div>
+                <label style={uploadButtonStyle}>
+                  画像を選択する
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setAnalyzeFile(file);
+                      setAnalyzeSrc(URL.createObjectURL(file));
+                      setAnalyzePrompt("");
+                      setAnalyzeResult(null);
+                      setAnalyzeStatus("");
+                    }}
+                  />
+                </label>
+                {analyzeSrc && (
+                  <div style={{ marginTop: 12, borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <img src={analyzeSrc} alt="解析画像" style={{ width: "100%", maxHeight: 320, objectFit: "contain", display: "block" }} />
+                  </div>
+                )}
+                <button
+                  onClick={() => void submitAnalyze()}
+                  disabled={!analyzeFile || analyzeLoading}
+                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !analyzeFile || analyzeLoading ? 0.5 : 1, cursor: !analyzeFile || analyzeLoading ? "not-allowed" : "pointer" }}
+                >
+                  {analyzeLoading ? "解析中..." : "① プロンプトを生成"}
+                </button>
+              </div>
+
+              {/* 生成プロンプト */}
+              <div style={panelStyle}>
+                <div style={sectionLabelStyle}>生成プロンプト（編集可）</div>
+                <textarea
+                  value={analyzePrompt}
+                  onChange={e => setAnalyzePrompt(e.target.value)}
+                  placeholder="① でプロンプトが生成されます。手動で入力することもできます。"
+                  rows={6}
+                  style={{
+                    width: "100%",
+                    background: "rgba(0,0,0,0.15)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    color: "#f5f0e8",
+                    fontSize: 12,
+                    padding: "10px 12px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    lineHeight: 1.6,
+                    boxSizing: "border-box",
+                  }}
+                />
+                {analyzeStatus && (
+                  <div style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: analyzeStatus.includes("エラー") || analyzeStatus.includes("失敗") ? "#e06060" : analyzeStatus === "完成！" ? "#4a8a6a" : "#6a6258",
+                    background: "rgba(0,0,0,0.06)",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                  }}>
+                    {analyzeStatus}
+                  </div>
+                )}
+                <button
+                  onClick={() => void submitTextToImage()}
+                  disabled={!analyzePrompt.trim() || analyzeGenLoading}
+                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !analyzePrompt.trim() || analyzeGenLoading ? 0.5 : 1, cursor: !analyzePrompt.trim() || analyzeGenLoading ? "not-allowed" : "pointer" }}
+                >
+                  {analyzeGenLoading ? "生成中..." : "② 画像を生成（1クレジット）"}
+                </button>
+              </div>
+
+              {/* 生成結果 */}
+              {analyzeResult && (
+                <div style={panelStyle}>
+                  <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>生成結果</div>
+                  <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <img src={analyzeResult} alt="生成結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
+                  </div>
+                  <button
+                    onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
+                    style={{ ...actionButtonStyle, width: "100%", marginTop: 10 }}
+                  >
+                    ダウンロード
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {tab === "history" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -2444,37 +2590,9 @@ export default function Home() {
               {/* 右カラム：設定 */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
-                  <div style={sectionLabelStyle}>髪型マッチング</div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "#4a3a28" }}>
-                    <input
-                      type="checkbox"
-                      checked={faceswapApplyHair}
-                      onChange={e => setFaceswapApplyHair(e.target.checked)}
-                      style={{ width: 14, height: 14, accentColor: "#b84242" }}
-                    />
-                    <span>顔画像の髪型を自動で適用する</span>
-                  </label>
-                  {faceswapApplyHair && (
-                    <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
-                      AIが顔画像の髪型・髪色を解析し、合成後の画像に適用します。
-                    </div>
-                  )}
-                  {faceswapDetectedHair && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: "#4a8a6a", background: "rgba(74,138,106,0.08)", borderRadius: 6, padding: "6px 10px", lineHeight: 1.6 }}>
-                      検出: {faceswapDetectedHair.hairstyle} / {faceswapDetectedHair.hairColor}
-                      {(faceswapDetectedHair.rawStyle || faceswapDetectedHair.rawColor) && (
-                        <span style={{ color: "#7a8a7a", fontSize: 10, marginLeft: 4 }}>
-                          （原文: &quot;{faceswapDetectedHair.rawStyle}&quot; / &quot;{faceswapDetectedHair.rawColor}&quot;）
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div style={panelStyle}>
                   <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
                     接続先: fal-ai/face-swap<br />
-                    料金目安: 約$0.05/枚（髪型マッチングONで+$0.05）
+                    料金目安: 約$0.05/枚（1クレジット）
                   </div>
                 </div>
 
