@@ -934,6 +934,19 @@ export default function Home() {
     }
   }, [analyzeResult]);
 
+  const sendResultToVideo = useCallback(async () => {
+    if (!analyzeResult) return;
+    try {
+      const resp = await fetch(analyzeResult);
+      const blob = await resp.blob();
+      const file = new File([blob], "edited-result.jpg", { type: blob.type || "image/jpeg" });
+      handleVideoUpload(file);
+      setTab("video");
+    } catch {
+      setAnalyzeStatus("画像の読み込みに失敗しました");
+    }
+  }, [analyzeResult, handleVideoUpload]);
+
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
     setVideoLoading(true);
@@ -1498,16 +1511,22 @@ export default function Home() {
                   <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
                     <img src={analyzeResult} alt="編集結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
                   </div>
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                     <button
                       onClick={() => void useResultForFurtherEdit()}
-                      style={{ ...actionButtonStyle, flex: 1 }}
+                      style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
                     >
-                      この結果をベースに追加編集
+                      追加編集
+                    </button>
+                    <button
+                      onClick={() => void sendResultToVideo()}
+                      style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
+                    >
+                      動画生成へ
                     </button>
                     <button
                       onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
-                      style={{ ...actionButtonStyle, flex: 1 }}
+                      style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
                     >
                       ダウンロード
                     </button>
@@ -2377,38 +2396,32 @@ export default function Home() {
                     <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
                       <img src={editResult} alt="編集後" style={{ width: "100%", maxHeight: 460, objectFit: "contain", display: "block" }} />
                     </div>
-                    <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+                    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
                       <button
                         onClick={() => void saveFileAs(editResult, editFile?.name, "grok-edit.jpg")}
-                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1 }}
+                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1, minWidth: 100 }}
                       >
                         ダウンロード
                       </button>
-                      <button onClick={() => setEditResult(null)} style={{ ...smallButtonStyle, flex: 1 }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const filename = editResult.split("/").pop() ?? "edit.jpg";
+                            const file = await imageUrlToFile(editResult, filename);
+                            handleVideoUpload(file);
+                            setTab("video");
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
+                      >
+                        動画生成へ
+                      </button>
+                      <button onClick={() => setEditResult(null)} style={{ ...smallButtonStyle, flex: 1, minWidth: 100 }}>
                         結果をクリア
                       </button>
                     </div>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const filename = editResult.split("/").pop() ?? "edit.jpg";
-                          const file = await imageUrlToFile(editResult, filename);
-                          handleVideoUpload(file);
-                          setTab("video");
-                        } catch {
-                          // ignore
-                        }
-                      }}
-                      style={{
-                        ...smallButtonStyle,
-                        marginTop: 8,
-                        width: "100%",
-                        background: "#3a3028",
-                        color: "#f5f0e8",
-                      }}
-                    >
-                      ▶ 動画生成
-                    </button>
                   </div>
                 ) : null}
               </div>
