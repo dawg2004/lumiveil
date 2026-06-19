@@ -919,6 +919,21 @@ export default function Home() {
     }
   }, [analyzePrompt, analyzeFile, getAuthToken, loadHistory]);
 
+  const useResultForFurtherEdit = useCallback(async () => {
+    if (!analyzeResult) return;
+    try {
+      const resp = await fetch(analyzeResult);
+      const blob = await resp.blob();
+      const file = new File([blob], "edited-result.jpg", { type: blob.type || "image/jpeg" });
+      setAnalyzeFile(file);
+      setAnalyzeSrc(analyzeResult);
+      setAnalyzeResult(null);
+      setAnalyzeStatus("編集結果を読み込みました。プロンプトを変更して再編集できます。");
+    } catch {
+      setAnalyzeStatus("画像の読み込みに失敗しました");
+    }
+  }, [analyzeResult]);
+
   const submitVideo = useCallback(async () => {
     if (!videoFile) return;
     setVideoLoading(true);
@@ -1462,12 +1477,20 @@ export default function Home() {
                   <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
                     <img src={analyzeResult} alt="編集結果" style={{ width: "100%", objectFit: "contain", display: "block" }} />
                   </div>
-                  <button
-                    onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
-                    style={{ ...actionButtonStyle, width: "100%", marginTop: 10 }}
-                  >
-                    ダウンロード
-                  </button>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => void useResultForFurtherEdit()}
+                      style={{ ...actionButtonStyle, flex: 1 }}
+                    >
+                      この結果をベースに追加編集
+                    </button>
+                    <button
+                      onClick={() => void saveFileAs(analyzeResult, undefined, "ai-generated.jpg")}
+                      style={{ ...actionButtonStyle, flex: 1 }}
+                    >
+                      ダウンロード
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
