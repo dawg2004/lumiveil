@@ -91,6 +91,7 @@ async function saveFileAs(url: string, sourceName: string | null | undefined, fa
   const ext = suggestedName.includes(".") ? `.${suggestedName.split(".").pop()}` : "";
   const win = window as Window & {
     showSaveFilePicker?: (options?: {
+      id?: string;
       suggestedName?: string;
       types?: Array<{
         description?: string;
@@ -105,7 +106,9 @@ async function saveFileAs(url: string, sourceName: string | null | undefined, fa
   };
 
   if (win.showSaveFilePicker) {
+    const isVideo = blob.type.startsWith("video/") || ext === ".mp4" || ext === ".webm";
     const handle = await win.showSaveFilePicker({
+      id: isVideo ? "lumiveil-video" : "lumiveil-image",
       suggestedName,
       types: [
         {
