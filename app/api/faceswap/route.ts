@@ -8,24 +8,7 @@ export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const FACE_SWAP_MODEL = "fal-ai/face-swap";
-const HAIR_CHANGE_MODEL = "fal-ai/image-apps-v2/hair-change";
-const VISION_MODEL = "fal-ai/moondream/batched";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
-
-const HAIRSTYLE_ENUMS = [
-  "short_hair","medium_long_hair","long_hair","curly_hair","wavy_hair",
-  "high_ponytail","bun","bob_cut","pixie_cut","braids","straight_hair",
-  "afro","dreadlocks","buzz_cut","mohawk","bangs","side_part","middle_part",
-] as const;
-
-const HAIR_COLOR_ENUMS = [
-  "black","dark_brown","light_brown","blonde","platinum_blonde","red",
-  "auburn","gray","silver","blue","green","purple","pink","rainbow",
-  "natural","highlights","ombre","balayage",
-] as const;
-
-type HairstyleEnum = typeof HAIRSTYLE_ENUMS[number];
-type HairColorEnum = typeof HAIR_COLOR_ENUMS[number];
 
 function createBearerSupabaseClient(token: string) {
   return createClient(
@@ -113,102 +96,6 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
   return nextCredits;
 }
 
-// Moondreamで3つの質問を1回のbatchedコールで処理（長さ・質感・色を分離）
-async function detectHairWithMoondream(imageUrl: string): Promise<{ styleText: string; colorText: string }> {
-  const result = await fal.subscribe(VISION_MODEL, {
-    input: {
-      inputs: [
-        {
-          image_url: imageUrl,
-          prompt: "Look at this person's hair length only. Choose exactly one: SHORT (above chin), MEDIUM (chin to shoulder), or LONG (below shoulder). Answer with one word only.",
-        },
-        {
-          image_url: imageUrl,
-          prompt: "Look at this person's hair texture only. Is it STRAIGHT, WAVY, or CURLY? Answer with exactly one word: STRAIGHT, WAVY, or CURLY.",
-        },
-        {
-          image_url: imageUrl,
-          prompt: "What color is this person's hair? Answer with 1-3 words only. Examples: black, dark brown, brown, light brown, blonde, red, gray.",
-        },
-      ],
-    },
-  });
-  const data = result.data as { outputs?: unknown[] };
-  const outputs = Array.isArray(data.outputs) ? data.outputs : [];
-
-  const extractText = (item: unknown): string => {
-    if (typeof item === "string") return item.trim();
-    if (item && typeof item === "object") {
-      const obj = item as Record<string, unknown>;
-      return String(obj.output ?? obj.text ?? obj.answer ?? "").trim();
-    }
-    return "";
-  };
-
-  const lengthText = extractText(outputs[0]);
-  const textureText = extractText(outputs[1]);
-  const colorText = extractText(outputs[2]);
-  const styleText = `${lengthText} ${textureText}`.trim();
-
-  console.log("Moondream raw outputs:", JSON.stringify(outputs));
-  console.log("Parsed length/texture/color:", { lengthText, textureText, colorText });
-  return { styleText, colorText };
-}
-
-// 回答テキストからenum値にマッピング
-function mapHairstyle(text: string): HairstyleEnum {
-  const t = text.toLowerCase();
-  // 特定スタイル（優先）
-  if (t.includes("buzz")) return "buzz_cut";
-  if (t.includes("pixie")) return "pixie_cut";
-  if (t.includes("bob")) return "bob_cut";
-  if (t.includes("ponytail")) return "high_ponytail";
-  if (t.includes("bun")) return "bun";
-  if (t.includes("braid")) return "braids";
-  if (t.includes("afro")) return "afro";
-  if (t.includes("dread")) return "dreadlocks";
-  if (t.includes("mohawk")) return "mohawk";
-  if (t.includes("bang")) return "bangs";
-  // 質感（次に優先 — ストレートより先にウェーブ/カールを判定）
-  if (t.includes("curl")) return "curly_hair";
-  if (t.includes("wav")) return "wavy_hair";
-  // 長さ＋ストレートの組み合わせ
-  if (t.includes("short")) return "short_hair";
-  if (t.includes("long")) return "long_hair";
-  if (t.includes("medium")) return "medium_long_hair";
-  if (t.includes("straight")) return "straight_hair";
-  return "medium_long_hair";
-}
-
-function mapHairColor(text: string): HairColorEnum {
-  const t = text.toLowerCase();
-  if (t.includes("platinum")) return "platinum_blonde";
-  if (t.includes("blond")) return "blonde";
-  if (t.includes("dark brown") || t.includes("dark-brown")) return "dark_brown";
-  if (t.includes("light brown") || t.includes("light-brown")) return "light_brown";
-  if (t.includes("brown")) return "dark_brown";
-  if (t.includes("auburn")) return "auburn";
-  if (t.includes("red")) return "red";
-  if (t.includes("gray") || t.includes("grey")) return "gray";
-  if (t.includes("silver")) return "silver";
-  if (t.includes("blue")) return "blue";
-  if (t.includes("green")) return "green";
-  if (t.includes("purple")) return "purple";
-  if (t.includes("pink")) return "pink";
-  if (t.includes("black")) return "black";
-  return "natural";
-}
-
-async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum; rawStyle: string; rawColor: string }> {
-  const { styleText, colorText } = await detectHairWithMoondream(faceImageUrl);
-  return {
-    hairstyle: mapHairstyle(styleText),
-    hairColor: mapHairColor(colorText),
-    rawStyle: styleText,
-    rawColor: colorText,
-  };
-}
-
 export async function POST(req: NextRequest) {
   try {
     if (!FAL_KEY) {
@@ -232,7 +119,6 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const faceFile = formData.get("face_file");
     const targetFile = formData.get("target_file");
-    const applyHair = formData.get("apply_hair") === "true";
 
     if (!(faceFile instanceof File) || !(targetFile instanceof File)) {
       return NextResponse.json({ error: "face_file と target_file の両方が必要です" }, { status: 400 });
@@ -240,13 +126,11 @@ export async function POST(req: NextRequest) {
 
     fal.config({ credentials: FAL_KEY });
 
-    // Step 1: 両画像を並列アップロード
     const [faceUrl, targetUrl] = await Promise.all([
       uploadToFal(faceFile),
       uploadToFal(targetFile),
     ]);
 
-    // Step 2: 顔ハメ
     const swapResult = await fal.subscribe(FACE_SWAP_MODEL, {
       input: {
         base_image_url: targetUrl,
@@ -259,54 +143,8 @@ export async function POST(req: NextRequest) {
     if (!swappedUrl) throw new Error("face-swap result url is missing");
 
     let finalUrl = swappedUrl;
-
-    // Step 3: 髪型マッチング（オプション）
-    let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum; rawStyle: string; rawColor: string } | null = null;
-    let hairError: string | null = null;
-    if (applyHair) {
-      try {
-        // Step 3a: moondreamで髪型・髪色を検出（1回のbatchedコール）
-        detectedHair = await detectHairFromImage(faceUrl);
-        console.log("Hair detection result:", JSON.stringify(detectedHair));
-
-        // swappedUrlをfal storageに再アップロードしてpublicなURLを確保
-        const swappedBlob = await fetch(swappedUrl).then(r => r.blob());
-        const swappedFile = new File([swappedBlob], "swapped.jpg", { type: "image/jpeg" });
-        const swappedFalUrl = await uploadToFal(swappedFile);
-
-        // Step 3b: hair-changeで髪型を合成結果に適用
-        const hairInput = {
-          image_url: swappedFalUrl,
-          target_hairstyle: detectedHair.hairstyle,
-          hair_color: detectedHair.hairColor,
-        };
-        console.log("Hair change input:", JSON.stringify(hairInput));
-
-        const hairResult = await fal.subscribe(HAIR_CHANGE_MODEL, {
-          input: hairInput,
-        });
-
-        const hairData = hairResult.data as { images?: Array<{ url?: string }> };
-        const hairUrl = hairData.images?.[0]?.url;
-        if (hairUrl) {
-          finalUrl = hairUrl;
-        } else {
-          hairError = "hair-changeの結果画像が取得できませんでした";
-          console.error("Hair change returned no image:", JSON.stringify(hairData));
-        }
-      } catch (err) {
-        // 髪型変更が失敗しても顔ハメ結果は返す
-        hairError = getErrorMessage(err);
-        const detail = err instanceof Error
-          ? { name: err.name, message: err.message, cause: err.cause }
-          : String(err);
-        console.error("Hair change failed, returning swap result:", JSON.stringify(detail));
-      }
-    }
-
-    // Supabaseに保存
     try {
-      finalUrl = await uploadToStorage(finalUrl, "image");
+      finalUrl = await uploadToStorage(swappedUrl, "image");
     } catch (err) {
       console.error("Storage upload failed, using fal URL:", err);
     }
@@ -315,12 +153,7 @@ export async function POST(req: NextRequest) {
     await saveGenerationHistory(adminClient, user.id, finalUrl);
     const credits = await decrementCredits(adminClient, shop.id, currentCredits);
 
-    return NextResponse.json({
-      url: finalUrl,
-      credits,
-      detectedHair,
-      hairError,
-    });
+    return NextResponse.json({ url: finalUrl, credits });
   } catch (error) {
     const msg = getErrorMessage(error);
     console.error("faceswap route failed", msg);
