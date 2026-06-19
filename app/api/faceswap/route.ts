@@ -113,18 +113,28 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
   return nextCredits;
 }
 
-// Grok Visionで顔画像の髪型・髪色をenum値に変換
-// Moondreamで画像に質問して回答テキストを得る
-async function askMoondream(imageUrl: string, prompt: string): Promise<string> {
+// Moondreamで画像に2つの質問を1回のbatchedコールで処理
+async function detectHairWithMoondream(imageUrl: string): Promise<{ styleText: string; colorText: string }> {
   const result = await fal.subscribe(VISION_MODEL, {
     input: {
-      inputs: [{ image_url: imageUrl, prompt }],
+      inputs: [
+        {
+          image_url: imageUrl,
+          prompt: "Describe this person's hairstyle in a few words (length and shape, e.g. short, long, curly, wavy, straight, bob, ponytail, bun).",
+        },
+        {
+          image_url: imageUrl,
+          prompt: "What is the hair color of this person? Answer with one or two words.",
+        },
+      ],
     },
   });
-  const data = result.data as { outputs?: string[]; output?: string };
-  if (Array.isArray(data.outputs) && data.outputs[0]) return data.outputs[0];
-  if (typeof data.output === "string") return data.output;
-  return "";
+  const data = result.data as { outputs?: string[] };
+  const outputs = Array.isArray(data.outputs) ? data.outputs : [];
+  return {
+    styleText: outputs[0] ?? "",
+    colorText: outputs[1] ?? "",
+  };
 }
 
 // 回答テキストからenum値にマッピング
@@ -168,11 +178,7 @@ function mapHairColor(text: string): HairColorEnum {
 }
 
 async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum }> {
-  const [styleText, colorText] = await Promise.all([
-    askMoondream(faceImageUrl, "Describe this person's hairstyle in a few words (length and shape, e.g. short, long, curly, wavy, straight, bob, ponytail, bun)."),
-    askMoondream(faceImageUrl, "What is the hair color of this person? Answer with one or two words."),
-  ]);
-
+  const { styleText, colorText } = await detectHairWithMoondream(faceImageUrl);
   return {
     hairstyle: mapHairstyle(styleText),
     hairColor: mapHairColor(colorText),
@@ -234,19 +240,25 @@ export async function POST(req: NextRequest) {
     let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum } | null = null;
     if (applyHair) {
       try {
+        // Step 3a: moondreamで髪型・髪色を検出（1回のbatchedコール）
         detectedHair = await detectHairFromImage(faceUrl);
+        console.log("Hair detection result:", JSON.stringify(detectedHair));
 
         // swappedUrlをfal storageに再アップロードしてpublicなURLを確保
         const swappedBlob = await fetch(swappedUrl).then(r => r.blob());
         const swappedFile = new File([swappedBlob], "swapped.jpg", { type: "image/jpeg" });
         const swappedFalUrl = await uploadToFal(swappedFile);
 
+        // Step 3b: hair-changeで髪型を合成結果に適用
+        const hairInput = {
+          image_url: swappedFalUrl,
+          target_hairstyle: detectedHair.hairstyle,
+          hair_color: detectedHair.hairColor,
+        };
+        console.log("Hair change input:", JSON.stringify(hairInput));
+
         const hairResult = await fal.subscribe(HAIR_CHANGE_MODEL, {
-          input: {
-            image_url: swappedFalUrl,
-            target_hairstyle: detectedHair.hairstyle,
-            hair_color: detectedHair.hairColor,
-          },
+          input: hairInput,
         });
 
         const hairData = hairResult.data as { images?: Array<{ url?: string }> };
@@ -256,7 +268,10 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         // 髪型変更が失敗しても顔ハメ結果は返す
-        console.error("Hair change failed, returning swap result:", err);
+        const detail = err instanceof Error
+          ? { name: err.name, message: err.message, cause: err.cause }
+          : String(err);
+        console.error("Hair change failed, returning swap result:", JSON.stringify(detail));
       }
     }
 
