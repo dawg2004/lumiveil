@@ -191,7 +191,7 @@ export default function Home() {
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
   const [faceswapApplyHair, setFaceswapApplyHair] = useState(true);
-  const [faceswapDetectedHair, setFaceswapDetectedHair] = useState<{ hairstyle: string; hairColor: string } | null>(null);
+  const [faceswapDetectedHair, setFaceswapDetectedHair] = useState<{ hairstyle: string; hairColor: string; rawStyle?: string; rawColor?: string } | null>(null);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
@@ -2462,6 +2462,11 @@ export default function Home() {
                   {faceswapDetectedHair && (
                     <div style={{ marginTop: 8, fontSize: 11, color: "#4a8a6a", background: "rgba(74,138,106,0.08)", borderRadius: 6, padding: "6px 10px", lineHeight: 1.6 }}>
                       検出: {faceswapDetectedHair.hairstyle} / {faceswapDetectedHair.hairColor}
+                      {(faceswapDetectedHair.rawStyle || faceswapDetectedHair.rawColor) && (
+                        <span style={{ color: "#7a8a7a", fontSize: 10, marginLeft: 4 }}>
+                          （原文: &quot;{faceswapDetectedHair.rawStyle}&quot; / &quot;{faceswapDetectedHair.rawColor}&quot;）
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>

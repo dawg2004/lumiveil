@@ -113,18 +113,22 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
   return nextCredits;
 }
 
-// Moondreamで画像に2つの質問を1回のbatchedコールで処理
+// Moondreamで3つの質問を1回のbatchedコールで処理（長さ・質感・色を分離）
 async function detectHairWithMoondream(imageUrl: string): Promise<{ styleText: string; colorText: string }> {
   const result = await fal.subscribe(VISION_MODEL, {
     input: {
       inputs: [
         {
           image_url: imageUrl,
-          prompt: "Describe this person's hairstyle in a few words (length and shape, e.g. short, long, curly, wavy, straight, bob, ponytail, bun).",
+          prompt: "Look at this person's hair length only. Choose exactly one: SHORT (above chin), MEDIUM (chin to shoulder), or LONG (below shoulder). Answer with one word only.",
         },
         {
           image_url: imageUrl,
-          prompt: "What is the hair color of this person? Answer with one or two words.",
+          prompt: "Look at this person's hair texture only. Is it STRAIGHT, WAVY, or CURLY? Answer with exactly one word: STRAIGHT, WAVY, or CURLY.",
+        },
+        {
+          image_url: imageUrl,
+          prompt: "What color is this person's hair? Answer with 1-3 words only. Examples: black, dark brown, brown, light brown, blonde, red, gray.",
         },
       ],
     },
@@ -133,39 +137,46 @@ async function detectHairWithMoondream(imageUrl: string): Promise<{ styleText: s
   const outputs = Array.isArray(data.outputs) ? data.outputs : [];
 
   const extractText = (item: unknown): string => {
-    if (typeof item === "string") return item;
+    if (typeof item === "string") return item.trim();
     if (item && typeof item === "object") {
       const obj = item as Record<string, unknown>;
-      return String(obj.output ?? obj.text ?? obj.answer ?? "");
+      return String(obj.output ?? obj.text ?? obj.answer ?? "").trim();
     }
     return "";
   };
 
-  const styleText = extractText(outputs[0]);
-  const colorText = extractText(outputs[1]);
+  const lengthText = extractText(outputs[0]);
+  const textureText = extractText(outputs[1]);
+  const colorText = extractText(outputs[2]);
+  const styleText = `${lengthText} ${textureText}`.trim();
+
   console.log("Moondream raw outputs:", JSON.stringify(outputs));
-  console.log("Parsed style/color:", { styleText, colorText });
+  console.log("Parsed length/texture/color:", { lengthText, textureText, colorText });
   return { styleText, colorText };
 }
 
 // 回答テキストからenum値にマッピング
 function mapHairstyle(text: string): HairstyleEnum {
   const t = text.toLowerCase();
+  // 特定スタイル（優先）
   if (t.includes("buzz")) return "buzz_cut";
   if (t.includes("pixie")) return "pixie_cut";
   if (t.includes("bob")) return "bob_cut";
-  if (t.includes("bun")) return "bun";
   if (t.includes("ponytail")) return "high_ponytail";
+  if (t.includes("bun")) return "bun";
   if (t.includes("braid")) return "braids";
   if (t.includes("afro")) return "afro";
   if (t.includes("dread")) return "dreadlocks";
   if (t.includes("mohawk")) return "mohawk";
   if (t.includes("bang")) return "bangs";
+  // 質感（次に優先 — ストレートより先にウェーブ/カールを判定）
   if (t.includes("curl")) return "curly_hair";
   if (t.includes("wav")) return "wavy_hair";
-  if (t.includes("straight")) return "straight_hair";
+  // 長さ＋ストレートの組み合わせ
   if (t.includes("short")) return "short_hair";
   if (t.includes("long")) return "long_hair";
+  if (t.includes("medium")) return "medium_long_hair";
+  if (t.includes("straight")) return "straight_hair";
   return "medium_long_hair";
 }
 
@@ -188,11 +199,13 @@ function mapHairColor(text: string): HairColorEnum {
   return "natural";
 }
 
-async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum }> {
+async function detectHairFromImage(faceImageUrl: string): Promise<{ hairstyle: HairstyleEnum; hairColor: HairColorEnum; rawStyle: string; rawColor: string }> {
   const { styleText, colorText } = await detectHairWithMoondream(faceImageUrl);
   return {
     hairstyle: mapHairstyle(styleText),
     hairColor: mapHairColor(colorText),
+    rawStyle: styleText,
+    rawColor: colorText,
   };
 }
 
@@ -248,7 +261,7 @@ export async function POST(req: NextRequest) {
     let finalUrl = swappedUrl;
 
     // Step 3: 髪型マッチング（オプション）
-    let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum } | null = null;
+    let detectedHair: { hairstyle: HairstyleEnum; hairColor: HairColorEnum; rawStyle: string; rawColor: string } | null = null;
     let hairError: string | null = null;
     if (applyHair) {
       try {
