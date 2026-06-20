@@ -221,6 +221,29 @@ export default function Home() {
   const lastSavedEditResultRef = useRef<string | null>(null);
   const lastSavedVideoResultRef = useRef<string | null>(null);
   const paypalCaptureStartedRef = useRef(false);
+  // favorites
+  const FAVORITES_KEY = "lumiveil_prompt_favorites";
+  const [promptFavorites, setPromptFavorites] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]"); } catch { return []; }
+  });
+  const [favoritesOpenFor, setFavoritesOpenFor] = useState<string | null>(null);
+  const addFavorite = useCallback((prompt: string) => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+    setPromptFavorites(prev => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [trimmed, ...prev].slice(0, 20);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+  const removeFavorite = useCallback((index: number) => {
+    setPromptFavorites(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
   // stitch mode (Grok v1.5 限定: 15秒×2本を連続生成して30秒として再生)
   const [videoStitchMode, setVideoStitchMode] = useState(false);
   const [videoStitchPart1, setVideoStitchPart1] = useState<string | null>(null);
@@ -1499,6 +1522,16 @@ export default function Home() {
                     boxSizing: "border-box",
                   }}
                 />
+                <FavoritesPanel
+                  currentPrompt={analyzePrompt}
+                  panelId="analyze"
+                  favorites={promptFavorites}
+                  openFor={favoritesOpenFor}
+                  onToggle={id => setFavoritesOpenFor(prev => prev === id ? null : id)}
+                  onAdd={addFavorite}
+                  onRemove={removeFavorite}
+                  onSelect={p => setAnalyzePrompt(p)}
+                />
                 {analyzeStatus && (
                   <div style={{
                     marginTop: 10,
@@ -2474,6 +2507,16 @@ export default function Home() {
                       resize: "vertical",
                     }}
                   />
+                  <FavoritesPanel
+                    currentPrompt={editPrompt}
+                    panelId="edit"
+                    favorites={promptFavorites}
+                    openFor={favoritesOpenFor}
+                    onToggle={id => setFavoritesOpenFor(prev => prev === id ? null : id)}
+                    onAdd={addFavorite}
+                    onRemove={removeFavorite}
+                    onSelect={p => setEditPrompt(p)}
+                  />
                   <BlockedKeywordWarning prompt={editPrompt} keywords={blockedKeywords} />
                 </div>
 
@@ -2885,6 +2928,16 @@ export default function Home() {
                       resize: "vertical",
                     }}
                   />
+                  <FavoritesPanel
+                    currentPrompt={videoPrompt}
+                    panelId="video"
+                    favorites={promptFavorites}
+                    openFor={favoritesOpenFor}
+                    onToggle={id => setFavoritesOpenFor(prev => prev === id ? null : id)}
+                    onAdd={addFavorite}
+                    onRemove={removeFavorite}
+                    onSelect={p => setVideoPrompt(p)}
+                  />
                   <BlockedKeywordWarning prompt={videoPrompt} keywords={blockedKeywords} />
                 </div>
 
@@ -3170,6 +3223,82 @@ function LoadingExperience({
   }
 
   return content;
+}
+
+function FavoritesPanel({
+  currentPrompt, panelId, favorites, openFor, onToggle, onAdd, onRemove, onSelect,
+}: {
+  currentPrompt: string;
+  panelId: string;
+  favorites: string[];
+  openFor: string | null;
+  onToggle: (id: string) => void;
+  onAdd: (p: string) => void;
+  onRemove: (i: number) => void;
+  onSelect: (p: string) => void;
+}) {
+  const isOpen = openFor === panelId;
+  return (
+    <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => onAdd(currentPrompt)}
+          disabled={!currentPrompt.trim()}
+          style={{
+            fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: currentPrompt.trim() ? "pointer" : "not-allowed",
+            border: "1px solid rgba(155,140,90,0.5)", background: "rgba(155,140,90,0.1)", color: "#7a6a40",
+            opacity: currentPrompt.trim() ? 1 : 0.5,
+          }}
+        >
+          ★ お気に入りに追加
+        </button>
+        {favorites.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onToggle(panelId)}
+            style={{
+              fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: "pointer",
+              border: "1px solid rgba(155,140,90,0.5)", background: isOpen ? "rgba(155,140,90,0.2)" : "rgba(155,140,90,0.08)", color: "#7a6a40",
+            }}
+          >
+            お気に入り {isOpen ? "▲" : "▼"} ({favorites.length})
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <div style={{
+          maxHeight: 200, overflowY: "auto", border: "1px solid rgba(155,140,90,0.3)",
+          borderRadius: 8, background: "rgba(0,0,0,0.04)",
+        }}>
+          {favorites.map((fav, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
+              borderBottom: i < favorites.length - 1 ? "1px solid rgba(155,140,90,0.15)" : "none",
+            }}>
+              <span style={{ flex: 1, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {fav}
+              </span>
+              <button
+                type="button"
+                onClick={() => { onSelect(fav); onToggle(panelId); }}
+                style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, cursor: "pointer", border: "1px solid #9b8c5a", background: "#9b8c5a", color: "#fff", flexShrink: 0 }}
+              >
+                適用
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, cursor: "pointer", border: "1px solid #ccc", background: "transparent", color: "#888", flexShrink: 0 }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const panelStyle: CSSProperties = {
