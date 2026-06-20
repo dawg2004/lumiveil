@@ -140,6 +140,20 @@ function findBlockedMatches(prompt: string, keywords: Array<{ keyword: string; r
   return keywords.filter(kw => lower.includes(kw.keyword.toLowerCase()));
 }
 
+const LUMIVEIL_HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
+function extractDisplayPrompt(raw: string | null): string {
+  if (!raw) return "";
+  if (raw.startsWith(LUMIVEIL_HISTORY_PREFIX)) {
+    try {
+      const parsed = JSON.parse(raw.slice(LUMIVEIL_HISTORY_PREFIX.length)) as { prompt?: string };
+      return parsed.prompt ?? "";
+    } catch {
+      return "";
+    }
+  }
+  return raw;
+}
+
 function BlockedKeywordWarning({ prompt, keywords }: { prompt: string; keywords: Array<{ keyword: string; reason: string | null }> }) {
   const matches = findBlockedMatches(prompt, keywords);
   if (matches.length === 0) return null;
@@ -1672,6 +1686,7 @@ export default function Home() {
                     const hasMedia = Boolean(item.generated_image_url);
                     const isVideo = item.media_type === "video" || isVideoHistoryUrl(item.generated_image_url);
                     const selected = selectedHistoryIds.includes(item.id);
+                    const displayPrompt = extractDisplayPrompt(item.prompt);
 
                     return (
                     <div key={item.id} style={{ ...panelStyle, padding: 0, overflow: "hidden", borderColor: selected ? "#b84242" : "#a89e8e", position: "relative" }}>
@@ -1747,9 +1762,25 @@ export default function Home() {
                             overflow: "hidden",
                           }}
                         >
-                          {item.prompt || "プロンプトなし"}
+                          {displayPrompt || "プロンプトなし"}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 12 }}>
+                        {displayPrompt && (
+                          <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                            <button
+                              onClick={() => void navigator.clipboard.writeText(displayPrompt)}
+                              style={{ ...smallButtonStyle, fontSize: 10, padding: "2px 8px" }}
+                            >
+                              コピー
+                            </button>
+                            <button
+                              onClick={() => addFavorite(displayPrompt)}
+                              style={{ ...smallButtonStyle, fontSize: 10, padding: "2px 8px", background: "#9b8c5a", color: "#fff", border: "1px solid #9b8c5a" }}
+                            >
+                              ★ お気に入り
+                            </button>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
                           <span style={{ fontSize: 11, color: "#6a6258" }}>
                             {item.credits_used ?? 1} credit
                           </span>
