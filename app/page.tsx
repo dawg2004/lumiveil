@@ -3307,7 +3307,7 @@ function FavoritesPanel({
               display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
               borderBottom: i < favorites.length - 1 ? "1px solid rgba(155,140,90,0.15)" : "none",
             }}>
-              <span style={{ flex: 1, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {fav}
               </span>
               <button
