@@ -173,7 +173,7 @@ function BlockedKeywordWarning({ prompt, keywords }: { prompt: string; keywords:
 }
 
 export default function Home() {
-  const [tab, setTab] = useState<TabId>("mosaic");
+  const [tab, setTab] = useState<TabId>("generate");
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
   const [mosaicImage, setMosaicImage] = useState<string | null>(null);
   const [mosaicImageSize, setMosaicImageSize] = useState<ImageSize | null>(null);
@@ -222,7 +222,7 @@ export default function Home() {
   const [videoModel, setVideoModel] = useState<VideoModel>("grok");
   const [videoPrompt, setVideoPrompt] = useState("natural movement, cinematic");
   const [videoDuration, setVideoDuration] = useState(5);
-  const [videoResolution, setVideoResolution] = useState("720p");
+  const [videoResolution, setVideoResolution] = useState("480p");
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoResult, setVideoResult] = useState<string | null>(null);
   const [videoRequestId, setVideoRequestId] = useState<string | null>(null);
