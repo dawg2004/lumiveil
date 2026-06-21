@@ -273,6 +273,7 @@ export default function Home() {
   const [historyDeleting, setHistoryDeleting] = useState(false);
   const [historyDownloadingId, setHistoryDownloadingId] = useState<string | null>(null);
   const [historyToVideoId, setHistoryToVideoId] = useState<string | null>(null);
+  const [historyToEditId, setHistoryToEditId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1804,33 +1805,60 @@ export default function Home() {
                           </button>
                         </div>
                         {!isVideo && hasMedia && (
-                          <button
-                            disabled={historyToVideoId === item.id}
-                            onClick={async () => {
-                              if (historyToVideoId) return;
-                              setHistoryToVideoId(item.id);
-                              try {
-                                const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
-                                const file = await imageUrlToFile(item.generated_image_url, filename);
-                                handleVideoUpload(file);
-                                setTab("video");
-                              } catch {
-                                // ignore
-                              } finally {
-                                setHistoryToVideoId(null);
-                              }
-                            }}
-                            style={{
-                              ...smallButtonStyle,
-                              marginTop: 8,
-                              width: "100%",
-                              background: historyToVideoId === item.id ? "#555" : "#3a3028",
-                              color: "#f5f0e8",
-                              cursor: historyToVideoId === item.id ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {historyToVideoId === item.id ? "読み込み中..." : "▶ 動画生成"}
-                          </button>
+                          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                            <button
+                              disabled={historyToEditId === item.id}
+                              onClick={async () => {
+                                if (historyToEditId) return;
+                                setHistoryToEditId(item.id);
+                                try {
+                                  const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
+                                  const file = await imageUrlToFile(item.generated_image_url, filename);
+                                  handleEditUpload(file);
+                                  setTab("edit");
+                                } catch {
+                                  // ignore
+                                } finally {
+                                  setHistoryToEditId(null);
+                                }
+                              }}
+                              style={{
+                                ...smallButtonStyle,
+                                flex: 1,
+                                background: historyToEditId === item.id ? "#555" : "#4a3a28",
+                                color: "#f5f0e8",
+                                cursor: historyToEditId === item.id ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {historyToEditId === item.id ? "読み込み中..." : "✏ 画像編集"}
+                            </button>
+                            <button
+                              disabled={historyToVideoId === item.id}
+                              onClick={async () => {
+                                if (historyToVideoId) return;
+                                setHistoryToVideoId(item.id);
+                                try {
+                                  const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
+                                  const file = await imageUrlToFile(item.generated_image_url, filename);
+                                  handleVideoUpload(file);
+                                  setTab("video");
+                                } catch {
+                                  // ignore
+                                } finally {
+                                  setHistoryToVideoId(null);
+                                }
+                              }}
+                              style={{
+                                ...smallButtonStyle,
+                                flex: 1,
+                                background: historyToVideoId === item.id ? "#555" : "#3a3028",
+                                color: "#f5f0e8",
+                                cursor: historyToVideoId === item.id ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {historyToVideoId === item.id ? "読み込み中..." : "▶ 動画生成"}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
