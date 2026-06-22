@@ -3,7 +3,7 @@
 import { detectFaceRegions, type FacePoint, type FaceRegions } from "@/lib/faceDetector";
 import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { createClient } from "@/lib/supabase";
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage";
 type MosaicBox = { x: number; y: number; width: number; height: number };
@@ -213,6 +213,7 @@ export default function Home() {
   const [analyzeSrc, setAnalyzeSrc] = useState<string | null>(null);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [analyzePrompt, setAnalyzePrompt] = useState("");
+  const [analyzePromptJa, setAnalyzePromptJa] = useState("");
   const [analyzeGenLoading, setAnalyzeGenLoading] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
   const [analyzeStatus, setAnalyzeStatus] = useState("");
@@ -915,6 +916,7 @@ export default function Home() {
     setAnalyzeLoading(true);
     setAnalyzeStatus("画像を解析中...");
     setAnalyzePrompt("");
+    setAnalyzePromptJa("");
     setAnalyzeResult(null);
     try {
       const token = await getAuthToken();
@@ -926,6 +928,7 @@ export default function Home() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "解析に失敗しました");
       setAnalyzePrompt(data.prompt);
+      setAnalyzePromptJa(data.promptJa ?? "");
       setAnalyzeStatus("プロンプト生成完了！内容を確認・編集して「画像生成」を押してください。");
     } catch (error) {
       setAnalyzeStatus(error instanceof Error ? error.message : "エラーが発生しました");
@@ -935,7 +938,8 @@ export default function Home() {
   }, [analyzeFile, getAuthToken]);
 
   const submitTextToImage = useCallback(async () => {
-    if (!analyzePrompt.trim() || !analyzeFile) return;
+    const effectivePrompt = analyzePromptJa.trim() || analyzePrompt.trim();
+    if (!effectivePrompt || !analyzeFile) return;
     setAnalyzeGenLoading(true);
     setAnalyzeStatus("画像を編集中...");
     setAnalyzeResult(null);
@@ -943,7 +947,7 @@ export default function Home() {
       const token = await getAuthToken();
       const formData = new FormData();
       formData.append("file", analyzeFile);
-      formData.append("prompt", analyzePrompt);
+      formData.append("prompt", effectivePrompt);
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
@@ -958,7 +962,7 @@ export default function Home() {
     } finally {
       setAnalyzeGenLoading(false);
     }
-  }, [analyzePrompt, analyzeFile, getAuthToken, loadHistory]);
+  }, [analyzePromptJa, analyzePrompt, analyzeFile, getAuthToken, loadHistory]);
 
   const useResultForFurtherEdit = useCallback(async () => {
     if (!analyzeResult) return;
@@ -1461,7 +1465,7 @@ export default function Home() {
           {tab === "analyze" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {/* 画像アップロード */}
-              <div style={panelStyle}>
+              <DropZone onFile={file => { setAnalyzeFile(file); setAnalyzeSrc(URL.createObjectURL(file)); setAnalyzePrompt(""); setAnalyzePromptJa(""); setAnalyzeResult(null); setAnalyzeStatus(""); }} style={panelStyle}>
                 <div style={sectionLabelStyle}>解析する画像</div>
                 <label style={uploadButtonStyle}>
                   画像を選択する
@@ -1475,6 +1479,7 @@ export default function Home() {
                       setAnalyzeFile(file);
                       setAnalyzeSrc(URL.createObjectURL(file));
                       setAnalyzePrompt("");
+                      setAnalyzePromptJa("");
                       setAnalyzeResult(null);
                       setAnalyzeStatus("");
                     }}
@@ -1492,7 +1497,7 @@ export default function Home() {
                 >
                   {analyzeLoading ? "解析中..." : "① プロンプトを生成"}
                 </button>
-              </div>
+              </DropZone>
 
               {/* 生成プロンプト */}
               <div style={panelStyle}>
@@ -1518,11 +1523,32 @@ export default function Home() {
                     />
                   </label>
                 </div>
+                <div style={{ fontSize: 11, color: "#8a7e6a", marginBottom: 4, marginTop: 8 }}>英語プロンプト</div>
                 <textarea
                   value={analyzePrompt}
                   onChange={e => setAnalyzePrompt(e.target.value)}
                   placeholder="① でプロンプトが生成されます。手動で入力することもできます。"
-                  rows={6}
+                  rows={4}
+                  style={{
+                    width: "100%",
+                    background: "rgba(0,0,0,0.15)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: 8,
+                    color: "#f5f0e8",
+                    fontSize: 12,
+                    padding: "10px 12px",
+                    resize: "vertical",
+                    fontFamily: "inherit",
+                    lineHeight: 1.6,
+                    boxSizing: "border-box",
+                  }}
+                />
+                <div style={{ fontSize: 11, color: "#8a7e6a", marginBottom: 4, marginTop: 10 }}>日本語プロンプト（編集可）</div>
+                <textarea
+                  value={analyzePromptJa}
+                  onChange={e => setAnalyzePromptJa(e.target.value)}
+                  placeholder="① でプロンプトが生成されます。"
+                  rows={4}
                   style={{
                     width: "100%",
                     background: "rgba(0,0,0,0.15)",
@@ -1538,14 +1564,14 @@ export default function Home() {
                   }}
                 />
                 <FavoritesPanel
-                  currentPrompt={analyzePrompt}
+                  currentPrompt={analyzePromptJa || analyzePrompt}
                   panelId="analyze"
                   favorites={promptFavorites}
                   openFor={favoritesOpenFor}
                   onToggle={id => setFavoritesOpenFor(prev => prev === id ? null : id)}
                   onAdd={addFavorite}
                   onRemove={removeFavorite}
-                  onSelect={p => setAnalyzePrompt(p)}
+                  onSelect={p => setAnalyzePromptJa(p)}
                 />
                 {analyzeStatus && (
                   <div style={{
@@ -1561,8 +1587,8 @@ export default function Home() {
                 )}
                 <button
                   onClick={() => void submitTextToImage()}
-                  disabled={!analyzePrompt.trim() || !analyzeFile || analyzeGenLoading}
-                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !analyzePrompt.trim() || !analyzeFile || analyzeGenLoading ? 0.5 : 1, cursor: !analyzePrompt.trim() || !analyzeFile || analyzeGenLoading ? "not-allowed" : "pointer" }}
+                  disabled={!(analyzePromptJa.trim() || analyzePrompt.trim()) || !analyzeFile || analyzeGenLoading}
+                  style={{ ...actionButtonStyle, width: "100%", marginTop: 12, opacity: !(analyzePromptJa.trim() || analyzePrompt.trim()) || !analyzeFile || analyzeGenLoading ? 0.5 : 1, cursor: !(analyzePromptJa.trim() || analyzePrompt.trim()) || !analyzeFile || analyzeGenLoading ? "not-allowed" : "pointer" }}
                 >
                   {analyzeGenLoading ? "編集中..." : "② 画像を編集（1クレジット）"}
                 </button>
@@ -2247,7 +2273,7 @@ export default function Home() {
 
           {tab === "mosaic" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
-              <div style={panelStyle}>
+              <DropZone onFile={file => void handleMosaicUpload(file)} style={panelStyle}>
                 <div style={sectionLabelStyle}>プレビュー</div>
 
                 <label style={uploadButtonStyle}>
@@ -2361,7 +2387,7 @@ export default function Home() {
                     {mosaicStage}
                   </div>
                 ) : null}
-              </div>
+              </DropZone>
 
               <div style={{ ...panelStyle, display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
@@ -2455,7 +2481,7 @@ export default function Home() {
 
           {tab === "edit" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
-              <div style={panelStyle}>
+              <DropZone onFile={file => handleEditUpload(file)} style={panelStyle}>
                 <div style={sectionLabelStyle}>元画像</div>
                 <label style={uploadButtonStyle}>
                   画像を選択する
@@ -2538,7 +2564,7 @@ export default function Home() {
                     </div>
                   </div>
                 ) : null}
-              </div>
+              </DropZone>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
@@ -2640,7 +2666,7 @@ export default function Home() {
               {/* 左カラム：画像アップロード */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 {/* 顔画像 */}
-                <div style={panelStyle}>
+                <DropZone onFile={file => { setFaceFile(file); setFaceSrc(URL.createObjectURL(file)); setFaceswapResult(null); setFaceswapStatus(""); }} style={panelStyle}>
                   <div style={sectionLabelStyle}>顔画像（元の顔）</div>
                   <label style={uploadButtonStyle}>
                     顔画像を選択する
@@ -2707,10 +2733,10 @@ export default function Home() {
                       <img src={faceSrc} alt="顔画像" style={{ width: "100%", maxHeight: 280, objectFit: "contain", display: "block" }} />
                     </div>
                   )}
-                </div>
+                </DropZone>
 
                 {/* 体画像 */}
-                <div style={panelStyle}>
+                <DropZone onFile={file => { setTargetFile(file); setTargetSrc(URL.createObjectURL(file)); setFaceswapResult(null); setFaceswapStatus(""); }} style={panelStyle}>
                   <div style={sectionLabelStyle}>体画像（合成先）</div>
                   <label style={uploadButtonStyle}>
                     体画像を選択する
@@ -2736,7 +2762,7 @@ export default function Home() {
                       )}
                     </div>
                   )}
-                </div>
+                </DropZone>
 
                 {/* 結果 */}
                 {faceswapResult && (
@@ -2813,7 +2839,7 @@ export default function Home() {
 
           {tab === "video" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
-              <div style={panelStyle}>
+              <DropZone onFile={file => handleVideoUpload(file)} style={panelStyle}>
                 <div style={sectionLabelStyle}>元画像</div>
                 <label style={uploadButtonStyle}>
                   画像を選択する
@@ -2938,7 +2964,7 @@ export default function Home() {
                     </button>
                   </div>
                 )}
-              </div>
+              </DropZone>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
@@ -3282,6 +3308,42 @@ function LoadingExperience({
   }
 
   return content;
+}
+
+function DropZone({ onFile, children, style }: { onFile: (f: File) => void; children: ReactNode; style?: CSSProperties }) {
+  const [dragging, setDragging] = useState(false);
+  return (
+    <div
+      style={{ position: "relative", ...style }}
+      onDragOver={e => { e.preventDefault(); setDragging(true); }}
+      onDragEnter={e => { e.preventDefault(); setDragging(true); }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={e => {
+        e.preventDefault();
+        setDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith("image/")) onFile(file);
+      }}
+    >
+      {dragging && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 50,
+          borderRadius: 12,
+          border: "2px dashed #c9a84c",
+          background: "rgba(201,168,76,0.12)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          pointerEvents: "none",
+        }}>
+          <span style={{ color: "#c9a84c", fontSize: 16, fontWeight: 600 }}>ここにドロップ</span>
+        </div>
+      )}
+      {children}
+    </div>
+  );
 }
 
 function FavoritesPanel({

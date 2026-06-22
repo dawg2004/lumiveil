@@ -74,6 +74,11 @@ export async function POST(req: NextRequest) {
             prompt:
               "You are an AI image generation expert. Analyze this image and write a detailed English prompt for AI image generation. Describe: the main subject (person/object), physical appearance, clothing/style, background/setting, lighting, mood, camera angle, and visual style. Format as a comma-separated list of descriptive English phrases. Be specific and detailed. Do NOT start with 'The image shows' — just list the phrases directly.",
           },
+          {
+            image_url: imageUrl,
+            prompt:
+              "あなたはAI画像生成の専門家です。この画像を分析し、AI画像生成のための詳細な日本語プロンプトを作成してください。主な被写体（人物/物体）、外見、服装/スタイル、背景/場所、照明、雰囲気、カメラアングル、視覚的スタイルを説明してください。説明的な日本語フレーズのカンマ区切りリストとして出力してください。「この画像は」で始めないでください。",
+          },
         ],
       },
     });
@@ -81,12 +86,13 @@ export async function POST(req: NextRequest) {
     const data = result.data as { outputs?: unknown[] };
     const outputs = Array.isArray(data.outputs) ? data.outputs : [];
     const prompt = extractText(outputs[0]);
+    const promptJa = extractText(outputs[1]);
 
     if (!prompt) {
       return NextResponse.json({ error: "プロンプトの生成に失敗しました" }, { status: 500 });
     }
 
-    return NextResponse.json({ prompt });
+    return NextResponse.json({ prompt, promptJa });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("analyze-image failed:", msg);
