@@ -277,6 +277,9 @@ export default function Home() {
   const [historyToEditId, setHistoryToEditId] = useState<string | null>(null);
   const [historyToAvatarId, setHistoryToAvatarId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const HISTORY_PAGE_SIZE = 500;
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -542,7 +545,7 @@ export default function Home() {
     window.location.href = "/login";
   }, []);
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (page = 1) => {
     setHistoryLoading(true);
     setHistoryStatus("");
     try {
@@ -554,13 +557,15 @@ export default function Home() {
       }
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 
-      const res = await fetch("/api/history", { headers });
+      const res = await fetch(`/api/history?page=${page}&pageSize=500`, { headers });
       const data = await res.json();
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "履歴を取得できませんでした");
       }
 
       setHistoryItems(data.history ?? []);
+      setHistoryTotal(data.total ?? 0);
+      setHistoryPage(page);
       setSelectedHistoryIds([]);
     } catch (error) {
       setHistoryItems([]);
@@ -1638,7 +1643,7 @@ export default function Home() {
                       <div style={{ fontSize: 11, color: "#9b8c5a" }}>※ 動画は約1時間で失効します</div>
                     </div>
                     <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
-                      アカウントに紐づいた画像・動画生成の結果を新しい順に最大1000件まで表示します。
+                      アカウントに紐づいた画像・動画生成の結果を新しい順に500件ずつ表示します。{historyTotal > 0 ? `（全${historyTotal}件）` : ""}
                     </div>
                     <div style={{ marginTop: 6, fontSize: 11, color: "#9b8c5a", lineHeight: 1.6 }}>
                       ※ 過去に生成したファイルは約1時間で失効します。現在は生成時にサーバーへ自動保存されるため、以降の生成物は永続的に保持されます。
@@ -1943,6 +1948,26 @@ export default function Home() {
                   </div>
                 </div>
               )}
+
+              {/* ページネーション */}
+              {historyTotal > HISTORY_PAGE_SIZE && (() => {
+                const totalPages = Math.ceil(historyTotal / HISTORY_PAGE_SIZE);
+                const btnStyle: CSSProperties = {
+                  fontSize: 12, padding: "5px 12px", borderRadius: 6, cursor: "pointer",
+                  border: "1px solid rgba(155,140,90,0.5)", background: "rgba(155,140,90,0.08)",
+                  color: "#7a6a40", fontFamily: "inherit",
+                };
+                const disabledStyle: CSSProperties = { ...btnStyle, opacity: 0.35, cursor: "not-allowed" };
+                return (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", flexWrap: "wrap" }}>
+                    <button style={historyPage === 1 ? disabledStyle : btnStyle} disabled={historyPage === 1 || historyLoading} onClick={() => void loadHistory(1)}>最初</button>
+                    <button style={historyPage === 1 ? disabledStyle : btnStyle} disabled={historyPage === 1 || historyLoading} onClick={() => void loadHistory(historyPage - 1)}>← 前</button>
+                    <span style={{ fontSize: 12, color: "#5f5648", padding: "0 4px" }}>{historyPage} / {totalPages} ページ（全{historyTotal}件）</span>
+                    <button style={historyPage === totalPages ? disabledStyle : btnStyle} disabled={historyPage === totalPages || historyLoading} onClick={() => void loadHistory(historyPage + 1)}>次 →</button>
+                    <button style={historyPage === totalPages ? disabledStyle : btnStyle} disabled={historyPage === totalPages || historyLoading} onClick={() => void loadHistory(totalPages)}>最後</button>
+                  </div>
+                );
+              })()}
             </div>
           ) : null}
 
