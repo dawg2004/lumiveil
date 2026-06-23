@@ -3404,9 +3404,6 @@ function FavoritesPanel({
               >
                 適用
               </button>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {fav}
-              </span>
               <button
                 type="button"
                 onClick={() => onRemove(i)}
@@ -3414,6 +3411,9 @@ function FavoritesPanel({
               >
                 ×
               </button>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {fav}
+              </span>
             </div>
           ))}
         </div>
