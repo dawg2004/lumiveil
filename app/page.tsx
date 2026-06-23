@@ -221,7 +221,7 @@ export default function Home() {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const [videoModel, setVideoModel] = useState<VideoModel>("grok");
-  const [videoPrompt, setVideoPrompt] = useState("natural movement, cinematic");
+  const [videoPrompt, setVideoPrompt] = useState("");
   const [videoDuration, setVideoDuration] = useState(5);
   const [videoResolution, setVideoResolution] = useState("480p");
   const [videoLoading, setVideoLoading] = useState(false);
