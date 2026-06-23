@@ -275,6 +275,7 @@ export default function Home() {
   const [historyDownloadingId, setHistoryDownloadingId] = useState<string | null>(null);
   const [historyToVideoId, setHistoryToVideoId] = useState<string | null>(null);
   const [historyToEditId, setHistoryToEditId] = useState<string | null>(null);
+  const [historyToAvatarId, setHistoryToAvatarId] = useState<string | null>(null);
   const [historyStatus, setHistoryStatus] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1884,6 +1885,36 @@ export default function Home() {
                             >
                               {historyToVideoId === item.id ? "読み込み中..." : "▶ 動画生成"}
                             </button>
+                            {!isVideo && (
+                              <button
+                                disabled={historyToAvatarId === item.id}
+                                onClick={async () => {
+                                  if (historyToAvatarId) return;
+                                  setHistoryToAvatarId(item.id);
+                                  try {
+                                    const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
+                                    const file = await imageUrlToFile(item.generated_image_url, filename);
+                                    setAvatarFiles([file]);
+                                    setAvatarPreviews([URL.createObjectURL(file)]);
+                                    setAvatarName("");
+                                    setTab("avatar");
+                                  } catch {
+                                    // ignore
+                                  } finally {
+                                    setHistoryToAvatarId(null);
+                                  }
+                                }}
+                                style={{
+                                  ...smallButtonStyle,
+                                  flex: 1,
+                                  background: historyToAvatarId === item.id ? "#555" : "#283a30",
+                                  color: "#f5f0e8",
+                                  cursor: historyToAvatarId === item.id ? "not-allowed" : "pointer",
+                                }}
+                              >
+                                {historyToAvatarId === item.id ? "読み込み中..." : "👤 キャスト登録"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
