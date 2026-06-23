@@ -1637,7 +1637,7 @@ export default function Home() {
                       <div style={{ fontSize: 11, color: "#9b8c5a" }}>※ 動画は約1時間で失効します</div>
                     </div>
                     <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
-                      アカウントに紐づいた画像・動画生成の結果を新しい順に最大50件まで表示します。
+                      アカウントに紐づいた画像・動画生成の結果を新しい順に最大200件まで表示します。
                     </div>
                     <div style={{ marginTop: 6, fontSize: 11, color: "#9b8c5a", lineHeight: 1.6 }}>
                       ※ 過去に生成したファイルは約1時間で失効します。現在は生成時にサーバーへ自動保存されるため、以降の生成物は永続的に保持されます。
