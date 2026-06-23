@@ -247,7 +247,7 @@ export default function Home() {
     if (!trimmed) return;
     setPromptFavorites(prev => {
       if (prev.includes(trimmed)) return prev;
-      const next = [trimmed, ...prev].slice(0, 20);
+      const next = [trimmed, ...prev].slice(0, 30);
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
       return next;
     });
