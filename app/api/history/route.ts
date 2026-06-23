@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
-const USER_HISTORY_LIMIT = 1000;
+const DEFAULT_PAGE_SIZE = 500;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
 function createBearerSupabaseClient(token: string) {
@@ -66,6 +66,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
     }
 
+    const searchParams = req.nextUrl.searchParams;
+    const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10));
+    const pageSize = Math.max(1, Math.min(500, parseInt(searchParams.get("pageSize") ?? String(DEFAULT_PAGE_SIZE), 10)));
+    const offset = (page - 1) * pageSize;
+
     const { data: shop, error: shopError } = await client
       .from("shops")
       .select("id")
@@ -78,12 +83,12 @@ export async function GET(req: NextRequest) {
 
     const shopIds = Array.from(new Set([user.id, shop?.id].filter(Boolean)));
 
-    const { data, error } = await client
+    const { data, error, count } = await client
       .from("generation_history")
-      .select("id, avatar_id, prompt, image_urls, credits_used, created_at, settings")
+      .select("id, avatar_id, prompt, image_urls, credits_used, created_at, settings", { count: "exact" })
       .in("shop_id", shopIds)
       .order("created_at", { ascending: false })
-      .limit(USER_HISTORY_LIMIT);
+      .range(offset, offset + pageSize - 1);
 
     if (error) {
       throw new Error(error.message);
@@ -109,7 +114,7 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ history, limit: USER_HISTORY_LIMIT });
+    return NextResponse.json({ history, total: count ?? 0, page, pageSize });
   } catch (error) {
     const message = error instanceof Error ? error.message : "履歴を取得できませんでした";
     console.error("history fetch failed", message);
