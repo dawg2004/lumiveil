@@ -276,6 +276,7 @@ export default function Home() {
   const [historyToVideoId, setHistoryToVideoId] = useState<string | null>(null);
   const [historyToEditId, setHistoryToEditId] = useState<string | null>(null);
   const [historyToAvatarId, setHistoryToAvatarId] = useState<string | null>(null);
+  const [toAvatarLoading, setToAvatarLoading] = useState(false);
   const [historyStatus, setHistoryStatus] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotal, setHistoryTotal] = useState(0);
@@ -1626,6 +1627,26 @@ export default function Home() {
                     >
                       ダウンロード
                     </button>
+                    <button
+                      disabled={toAvatarLoading}
+                      onClick={async () => {
+                        if (toAvatarLoading) return;
+                        setToAvatarLoading(true);
+                        try {
+                          const filename = analyzeResult.split("/").pop() ?? "image.jpg";
+                          const file = await imageUrlToFile(analyzeResult, filename);
+                          setAvatarFiles([file]);
+                          setAvatarPreviews([URL.createObjectURL(file)]);
+                          setAvatarName("");
+                          setTab("avatar");
+                        } catch { /* ignore */ } finally {
+                          setToAvatarLoading(false);
+                        }
+                      }}
+                      style={{ ...actionButtonStyle, flex: 1, minWidth: 100, background: toAvatarLoading ? "#555" : "#283a30", color: "#f5f0e8", cursor: toAvatarLoading ? "not-allowed" : "pointer" }}
+                    >
+                      {toAvatarLoading ? "読み込み中..." : "👤 キャスト登録"}
+                    </button>
                   </div>
                 </div>
               )}
@@ -2600,6 +2621,26 @@ export default function Home() {
                         ダウンロード
                       </button>
                       <button
+                        disabled={toAvatarLoading}
+                        onClick={async () => {
+                          if (toAvatarLoading) return;
+                          setToAvatarLoading(true);
+                          try {
+                            const filename = editResult.split("/").pop() ?? "edit.jpg";
+                            const file = await imageUrlToFile(editResult, filename);
+                            setAvatarFiles([file]);
+                            setAvatarPreviews([URL.createObjectURL(file)]);
+                            setAvatarName("");
+                            setTab("avatar");
+                          } catch { /* ignore */ } finally {
+                            setToAvatarLoading(false);
+                          }
+                        }}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100, background: toAvatarLoading ? "#555" : "#283a30", color: "#f5f0e8", cursor: toAvatarLoading ? "not-allowed" : "pointer" }}
+                      >
+                        {toAvatarLoading ? "読み込み中..." : "👤 キャスト登録"}
+                      </button>
+                      <button
                         onClick={async () => {
                           try {
                             const filename = editResult.split("/").pop() ?? "edit.jpg";
@@ -2833,6 +2874,26 @@ export default function Home() {
                         style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1 }}
                       >
                         ダウンロード
+                      </button>
+                      <button
+                        disabled={toAvatarLoading}
+                        onClick={async () => {
+                          if (toAvatarLoading) return;
+                          setToAvatarLoading(true);
+                          try {
+                            const filename = faceswapResult.split("/").pop() ?? "faceswap.jpg";
+                            const file = await imageUrlToFile(faceswapResult, filename);
+                            setAvatarFiles([file]);
+                            setAvatarPreviews([URL.createObjectURL(file)]);
+                            setAvatarName("");
+                            setTab("avatar");
+                          } catch { /* ignore */ } finally {
+                            setToAvatarLoading(false);
+                          }
+                        }}
+                        style={{ ...actionButtonStyle, flex: 1, background: toAvatarLoading ? "#555" : "#283a30", color: "#f5f0e8", cursor: toAvatarLoading ? "not-allowed" : "pointer" }}
+                      >
+                        {toAvatarLoading ? "読み込み中..." : "👤 キャスト登録"}
                       </button>
                       <button
                         onClick={() => { handleVideoUpload(targetFile!); setTab("video"); }}
