@@ -237,28 +237,45 @@ export default function Home() {
   const lastSavedVideoResultRef = useRef<string | null>(null);
   const paypalCaptureStartedRef = useRef(false);
   // favorites
-  const FAVORITES_KEY = "lumiveil_prompt_favorites";
-  const [promptFavorites, setPromptFavorites] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || "[]"); } catch { return []; }
-  });
+  const [promptFavorites, setPromptFavorites] = useState<{ id: string; prompt: string }[]>([]);
   const [favoritesOpenFor, setFavoritesOpenFor] = useState<string | null>(null);
-  const addFavorite = useCallback((prompt: string) => {
+  const loadFavorites = useCallback(async () => {
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/favorites", { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPromptFavorites(data.favorites ?? []);
+    } catch { /* ignore */ }
+  }, [getAuthToken]);
+  const addFavorite = useCallback(async (prompt: string) => {
     const trimmed = prompt.trim();
     if (!trimmed) return;
-    setPromptFavorites(prev => {
-      if (prev.includes(trimmed)) return prev;
-      const next = [trimmed, ...prev].slice(0, 30);
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
-  const removeFavorite = useCallback((index: number) => {
-    setPromptFavorites(prev => {
-      const next = prev.filter((_, i) => i !== index);
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
-      return next;
-    });
-  }, []);
+    if (promptFavorites.some(f => f.prompt === trimmed)) return;
+    // optimistic update
+    const tempId = `tmp_${Date.now()}`;
+    setPromptFavorites(prev => [{ id: tempId, prompt: trimmed }, ...prev].slice(0, 30));
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      const res = await fetch("/api/favorites", { method: "POST", headers, body: JSON.stringify({ prompt: trimmed }) });
+      const data = await res.json();
+      if (data.id) {
+        setPromptFavorites(prev => prev.map(f => f.id === tempId ? { id: data.id, prompt: trimmed } : f));
+      }
+    } catch { /* keep optimistic state */ }
+  }, [promptFavorites, getAuthToken]);
+  const removeFavorite = useCallback(async (index: number) => {
+    const item = promptFavorites[index];
+    if (!item) return;
+    setPromptFavorites(prev => prev.filter((_, i) => i !== index));
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      await fetch("/api/favorites", { method: "DELETE", headers, body: JSON.stringify({ id: item.id }) });
+    } catch { /* ignore */ }
+  }, [promptFavorites, getAuthToken]);
   // stitch mode (Grok v1.5 限定: 15秒×2本を連続生成して30秒として再生)
   const [videoStitchMode, setVideoStitchMode] = useState(false);
   const [videoStitchPart1, setVideoStitchPart1] = useState<string | null>(null);
@@ -1190,6 +1207,10 @@ export default function Home() {
   }, [loadCredits]);
 
   useEffect(() => {
+    void loadFavorites();
+  }, [loadFavorites]);
+
+  useEffect(() => {
     fetch("/api/blocked-keywords")
       .then(r => r.json())
       .then(data => { if (data.keywords) setBlockedKeywords(data.keywords); })
@@ -1827,7 +1848,7 @@ export default function Home() {
                               コピー
                             </button>
                             <button
-                              onClick={() => addFavorite(displayPrompt)}
+                              onClick={() => void addFavorite(displayPrompt)}
                               style={{ ...smallButtonStyle, fontSize: 10, padding: "2px 8px", background: "#9b8c5a", color: "#fff", border: "1px solid #9b8c5a" }}
                             >
                               ★ お気に入り
@@ -3468,11 +3489,11 @@ function FavoritesPanel({
 }: {
   currentPrompt: string;
   panelId: string;
-  favorites: string[];
+  favorites: { id: string; prompt: string }[];
   openFor: string | null;
   onToggle: (id: string) => void;
-  onAdd: (p: string) => void;
-  onRemove: (i: number) => void;
+  onAdd: (p: string) => void | Promise<void>;
+  onRemove: (i: number) => void | Promise<void>;
   onSelect: (p: string) => void;
 }) {
   const isOpen = openFor === panelId;
@@ -3481,7 +3502,7 @@ function FavoritesPanel({
       <div style={{ display: "flex", gap: 6 }}>
         <button
           type="button"
-          onClick={() => onAdd(currentPrompt)}
+          onClick={() => void onAdd(currentPrompt)}
           disabled={!currentPrompt.trim()}
           style={{
             fontSize: 11, padding: "3px 10px", borderRadius: 6, cursor: currentPrompt.trim() ? "pointer" : "not-allowed",
@@ -3510,26 +3531,26 @@ function FavoritesPanel({
           borderRadius: 8, background: "rgba(0,0,0,0.04)",
         }}>
           {favorites.map((fav, i) => (
-            <div key={i} style={{
+            <div key={fav.id} style={{
               display: "flex", alignItems: "center", gap: 6, padding: "6px 10px",
               borderBottom: i < favorites.length - 1 ? "1px solid rgba(155,140,90,0.15)" : "none",
             }}>
               <button
                 type="button"
-                onClick={() => { onSelect(fav); onToggle(panelId); }}
+                onClick={() => { onSelect(fav.prompt); onToggle(panelId); }}
                 style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, cursor: "pointer", border: "1px solid #9b8c5a", background: "#9b8c5a", color: "#fff", flexShrink: 0 }}
               >
                 適用
               </button>
               <button
                 type="button"
-                onClick={() => onRemove(i)}
+                onClick={() => void onRemove(i)}
                 style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, cursor: "pointer", border: "1px solid #ccc", background: "transparent", color: "#888", flexShrink: 0 }}
               >
                 ×
               </button>
               <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: "#444", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {fav}
+                {fav.prompt}
               </span>
             </div>
           ))}
