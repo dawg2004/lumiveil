@@ -236,46 +236,9 @@ export default function Home() {
   const lastSavedEditResultRef = useRef<string | null>(null);
   const lastSavedVideoResultRef = useRef<string | null>(null);
   const paypalCaptureStartedRef = useRef(false);
-  // favorites
+  // favorites (state only — callbacks declared after getAuthToken)
   const [promptFavorites, setPromptFavorites] = useState<{ id: string; prompt: string }[]>([]);
   const [favoritesOpenFor, setFavoritesOpenFor] = useState<string | null>(null);
-  const loadFavorites = useCallback(async () => {
-    try {
-      const token = await getAuthToken();
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch("/api/favorites", { headers });
-      if (!res.ok) return;
-      const data = await res.json();
-      setPromptFavorites(data.favorites ?? []);
-    } catch { /* ignore */ }
-  }, [getAuthToken]);
-  const addFavorite = useCallback(async (prompt: string) => {
-    const trimmed = prompt.trim();
-    if (!trimmed) return;
-    if (promptFavorites.some(f => f.prompt === trimmed)) return;
-    // optimistic update
-    const tempId = `tmp_${Date.now()}`;
-    setPromptFavorites(prev => [{ id: tempId, prompt: trimmed }, ...prev].slice(0, 30));
-    try {
-      const token = await getAuthToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-      const res = await fetch("/api/favorites", { method: "POST", headers, body: JSON.stringify({ prompt: trimmed }) });
-      const data = await res.json();
-      if (data.id) {
-        setPromptFavorites(prev => prev.map(f => f.id === tempId ? { id: data.id, prompt: trimmed } : f));
-      }
-    } catch { /* keep optimistic state */ }
-  }, [promptFavorites, getAuthToken]);
-  const removeFavorite = useCallback(async (index: number) => {
-    const item = promptFavorites[index];
-    if (!item) return;
-    setPromptFavorites(prev => prev.filter((_, i) => i !== index));
-    try {
-      const token = await getAuthToken();
-      const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-      await fetch("/api/favorites", { method: "DELETE", headers, body: JSON.stringify({ id: item.id }) });
-    } catch { /* ignore */ }
-  }, [promptFavorites, getAuthToken]);
   // stitch mode (Grok v1.5 限定: 15秒×2本を連続生成して30秒として再生)
   const [videoStitchMode, setVideoStitchMode] = useState(false);
   const [videoStitchPart1, setVideoStitchPart1] = useState<string | null>(null);
@@ -537,6 +500,50 @@ export default function Home() {
 
     return refreshed.session?.access_token ?? null;
   }, []);
+
+  const loadFavorites = useCallback(async () => {
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch("/api/favorites", { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      setPromptFavorites(data.favorites ?? []);
+    } catch { /* ignore */ }
+  }, [getAuthToken]);
+  const addFavorite = useCallback(async (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (!trimmed) return;
+    setPromptFavorites(prev => {
+      if (prev.some(f => f.prompt === trimmed)) return prev;
+      const tempId = `tmp_${Date.now()}`;
+      getAuthToken().then(token => {
+        const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+        fetch("/api/favorites", { method: "POST", headers, body: JSON.stringify({ prompt: trimmed }) })
+          .then(r => r.json())
+          .then(data => {
+            if (data.id) {
+              setPromptFavorites(p => p.map(f => f.id === tempId ? { id: data.id, prompt: trimmed } : f));
+            }
+          })
+          .catch(() => {});
+      }).catch(() => {});
+      return [{ id: tempId, prompt: trimmed }, ...prev].slice(0, 30);
+    });
+  }, [getAuthToken]);
+  const removeFavorite = useCallback(async (index: number) => {
+    let itemId: string | undefined;
+    setPromptFavorites(prev => {
+      itemId = prev[index]?.id;
+      return prev.filter((_, i) => i !== index);
+    });
+    if (!itemId) return;
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+      await fetch("/api/favorites", { method: "DELETE", headers, body: JSON.stringify({ id: itemId }) });
+    } catch { /* ignore */ }
+  }, [getAuthToken]);
 
   const loadCredits = useCallback(async () => {
     try {
