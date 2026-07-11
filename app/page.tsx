@@ -11,7 +11,7 @@ type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
 type VideoModel = "grok" | "grok_v15" | "seedance";
 type EditResolution = "1k" | "2k";
-type EditModel = "grok" | "lumiveil_v1.0";
+type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
 type RegisteredAvatar = {
   id: string;
   name: string;
@@ -197,6 +197,7 @@ export default function Home() {
   const [editPrompt, setEditPrompt] = useState("");
   const [editResolution, setEditResolution] = useState<EditResolution>("1k");
   const [editModel, setEditModel] = useState<EditModel>("grok");
+  const [atlasSize, setAtlasSize] = useState("1280*1280");
   const [editLoading, setEditLoading] = useState(false);
   const [editResult, setEditResult] = useState<string | null>(null);
   const [editStatus, setEditStatus] = useState("");
@@ -873,31 +874,43 @@ export default function Home() {
     if (!editFile) return;
 
     setEditLoading(true);
-    setEditStatus("Grok Imagine で編集中...");
 
     try {
       const formData = new FormData();
       formData.append("file", editFile);
       formData.append("prompt", editPrompt);
-      formData.append("model", editModel);
-      formData.append("resolution", editResolution);
 
-      const res = await fetch("/api/edit", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error ?? "編集に失敗しました");
+      if (editModel === "atlas") {
+        setEditStatus("Wan-2.6 で編集中... (最大5分かかる場合があります)");
+        formData.append("size", atlasSize);
+        const token = await getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch("/api/atlascloud-edit", { method: "POST", headers, body: formData });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error ?? "Wan-2.6編集に失敗しました");
+        setEditResult(data.url);
+        lastSavedEditResultRef.current = data.url;
+        if (data.credits != null) setCredits(data.credits);
+        void loadHistory();
+        setEditStatus("Wan-2.6編集が完了しました。");
+      } else {
+        setEditStatus("Grok Imagine で編集中...");
+        formData.append("model", editModel);
+        formData.append("resolution", editResolution);
+        const res = await fetch("/api/edit", { method: "POST", body: formData });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error ?? "編集に失敗しました");
+        setEditResult(data.url);
+        lastSavedEditResultRef.current = data.url;
+        void loadHistory();
+        setEditStatus("編集が完了しました。");
       }
-
-      setEditResult(data.url);
-      lastSavedEditResultRef.current = data.url;
-      void loadHistory();
-      setEditStatus("編集が完了しました。");
     } catch (error) {
       setEditStatus(error instanceof Error ? error.message : "編集に失敗しました");
     } finally {
       setEditLoading(false);
     }
-  }, [editFile, editPrompt, editResolution, loadHistory]);
+  }, [atlasSize, editFile, editModel, editPrompt, editResolution, getAuthToken, loadHistory]);
 
   const resetEdit = useCallback(() => {
     setEditFile(null);
@@ -2694,8 +2707,25 @@ export default function Home() {
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>モデル</div>
-                  <div style={{ fontSize: 12, color: "#4e4a43", lineHeight: 1.7 }}>
-                    
+                  <div style={buttonRowStyle}>
+                    {([
+                      { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
+                      { id: "atlas", label: "Wan-2.6", desc: "画像編集特化" },
+                    ] as { id: EditModel; label: string; desc: string }[]).map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setEditModel(m.id)}
+                        style={{ ...choiceButtonStyle(editModel === m.id), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 14px" }}
+                      >
+                        <span style={{ fontWeight: 600, fontSize: 12 }}>{m.label}</span>
+                        <span style={{ fontSize: 10, opacity: 0.75 }}>{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
+                    {editModel === "atlas"
+                      ? "接続先: atlascloud.ai / alibaba/wan-2.6/image-edit"
+                      : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
                   </div>
                 </div>
 
@@ -2730,26 +2760,44 @@ export default function Home() {
                   <BlockedKeywordWarning prompt={editPrompt} keywords={blockedKeywords} />
                 </div>
 
-                <div style={panelStyle}>
-                  <div style={sectionLabelStyle}>解像度</div>
-                  <div style={buttonRowStyle}>
-                    {(["1k", "2k"] as EditResolution[]).map(resolution => (
-                      <button
-                        key={resolution}
-                        onClick={() => setEditResolution(resolution)}
-                        style={choiceButtonStyle(editResolution === resolution)}
-                      >
-                        {resolution}
-                      </button>
-                    ))}
+                {editModel !== "atlas" && (
+                  <div style={panelStyle}>
+                    <div style={sectionLabelStyle}>解像度</div>
+                    <div style={buttonRowStyle}>
+                      {(["1k", "2k"] as EditResolution[]).map(resolution => (
+                        <button
+                          key={resolution}
+                          onClick={() => setEditResolution(resolution)}
+                          style={choiceButtonStyle(editResolution === resolution)}
+                        >
+                          {resolution}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
+                      料金目安: 1K 約$0.06 / 2K 約$0.08。顔保持指定は入れていますが、顔固定専用モデルではありません。
+                    </div>
                   </div>
-                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
-                    接続先: fal.ai / xai/grok-imagine-image/quality/edit
+                )}
+                {editModel === "atlas" && (
+                  <div style={panelStyle}>
+                    <div style={sectionLabelStyle}>出力サイズ</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {["1280*1280", "1280*720", "720*1280", "1024*1024", "960*1280", "1280*960"].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => setAtlasSize(s)}
+                          style={choiceButtonStyle(atlasSize === s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", lineHeight: 1.5 }}>
+                      生成に最大5分かかる場合があります。
+                    </div>
                   </div>
-                  <div style={{ marginTop: 4, fontSize: 11, color: "#6a6258", lineHeight: 1.5 }}>
-                    料金目安: 1K 約$0.06 / 2K 約$0.08。顔保持指定は入れていますが、顔固定専用モデルではありません。
-                  </div>
-                </div>
+                )}
 
                 <div style={panelStyle}>
                   {editStatus ? (
