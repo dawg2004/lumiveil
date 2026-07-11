@@ -40,6 +40,7 @@ export default function AdminAccountsPage() {
   const [pwEditId, setPwEditId] = useState<string | null>(null);
   const [pwSavingId, setPwSavingId] = useState<string | null>(null);
   const [pwStatus, setPwStatus] = useState("");
+  const [pwIsError, setPwIsError] = useState(false);
 
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
@@ -219,18 +220,21 @@ export default function AdminAccountsPage() {
     if (!password) return;
     setPwSavingId(userId);
     setPwStatus("");
+    setPwIsError(false);
+    const account = accounts.find(a => a.id === userId);
     try {
       const res = await fetch("/api/admin/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, password }),
+        body: JSON.stringify({ userId, email: account?.email, password }),
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error ?? "失敗しました");
-      setPwStatus(`${accounts.find(a => a.id === userId)?.email ?? userId} のパスワードを更新しました。`);
+      setPwStatus(`${account?.email ?? userId} のパスワードを更新しました。`);
       setPwEditId(null);
       setPwDrafts(d => { const next = { ...d }; delete next[userId]; return next; });
     } catch (error) {
+      setPwIsError(true);
       setPwStatus(error instanceof Error ? error.message : "パスワード更新に失敗しました");
     } finally {
       setPwSavingId(null);
@@ -298,7 +302,7 @@ export default function AdminAccountsPage() {
         ) : null}
 
         {pwStatus ? (
-          <div style={{ ...panelStyle, background: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#3a1a1a" : "#0d2e1e", color: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#7a2a2a" : "#2a7a4a" }}>
+          <div style={{ ...panelStyle, background: pwIsError ? "#3a1a1a" : "#0d2e1e", color: pwIsError ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: pwIsError ? "#7a2a2a" : "#2a7a4a" }}>
             {pwStatus}
           </div>
         ) : null}
