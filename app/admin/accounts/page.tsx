@@ -36,6 +36,11 @@ export default function AdminAccountsPage() {
   const [confirmingEmails, setConfirmingEmails] = useState(false);
   const [confirmStatus, setConfirmStatus] = useState("");
 
+  const [pwDrafts, setPwDrafts] = useState<Record<string, string>>({});
+  const [pwEditId, setPwEditId] = useState<string | null>(null);
+  const [pwSavingId, setPwSavingId] = useState<string | null>(null);
+  const [pwStatus, setPwStatus] = useState("");
+
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
@@ -209,6 +214,29 @@ export default function AdminAccountsPage() {
     }
   }, [loadAccounts]);
 
+  const setUserPassword = useCallback(async (userId: string) => {
+    const password = pwDrafts[userId] ?? "";
+    if (!password) return;
+    setPwSavingId(userId);
+    setPwStatus("");
+    try {
+      const res = await fetch("/api/admin/set-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, password }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "失敗しました");
+      setPwStatus(`${accounts.find(a => a.id === userId)?.email ?? userId} のパスワードを更新しました。`);
+      setPwEditId(null);
+      setPwDrafts(d => { const next = { ...d }; delete next[userId]; return next; });
+    } catch (error) {
+      setPwStatus(error instanceof Error ? error.message : "パスワード更新に失敗しました");
+    } finally {
+      setPwSavingId(null);
+    }
+  }, [accounts, pwDrafts]);
+
   const deleteKeyword = useCallback(async (id: string) => {
     setKeywordStatus("");
     try {
@@ -269,6 +297,12 @@ export default function AdminAccountsPage() {
           </div>
         ) : null}
 
+        {pwStatus ? (
+          <div style={{ ...panelStyle, background: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#3a1a1a" : "#0d2e1e", color: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: pwStatus.includes("失敗") || pwStatus.includes("エラー") ? "#7a2a2a" : "#2a7a4a" }}>
+            {pwStatus}
+          </div>
+        ) : null}
+
         {status ? (
           <div style={{ ...panelStyle, color: status.includes("権限") || status.includes("ログイン") || status.includes("失敗") ? "#b84242" : "#171717" }}>
             {status}
@@ -290,6 +324,7 @@ export default function AdminAccountsPage() {
                   <th style={thStyle}>登録日</th>
                   <th style={thStyle}>最終ログイン</th>
                   <th style={thStyle}>操作</th>
+                  <th style={thStyle}>PW設定</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,6 +401,43 @@ export default function AdminAccountsPage() {
                         >
                           {saving ? "保存中..." : "保存"}
                         </button>
+                      </td>
+                      <td style={tdStyle}>
+                        {pwEditId === account.id ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <input
+                              type="password"
+                              placeholder="新パスワード(6文字以上)"
+                              value={pwDrafts[account.id] ?? ""}
+                              onChange={e => setPwDrafts(d => ({ ...d, [account.id]: e.target.value }))}
+                              onKeyDown={e => { if (e.key === "Enter") void setUserPassword(account.id); if (e.key === "Escape") setPwEditId(null); }}
+                              autoFocus
+                              style={{ ...inputStyle, minWidth: 160 }}
+                            />
+                            <div style={{ display: "flex", gap: 4 }}>
+                              <button
+                                onClick={() => void setUserPassword(account.id)}
+                                disabled={pwSavingId === account.id || !(pwDrafts[account.id] ?? "")}
+                                style={{ ...miniActionButtonStyle, flex: 1 }}
+                              >
+                                {pwSavingId === account.id ? "更新中..." : "確定"}
+                              </button>
+                              <button
+                                onClick={() => setPwEditId(null)}
+                                style={{ ...smallButtonStyle, flex: 1, fontSize: 11 }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setPwEditId(account.id); setPwStatus(""); }}
+                            style={{ ...miniActionButtonStyle, background: "#1e2d3e", border: "1px solid #334155", color: "#93c5fd" }}
+                          >
+                            PW変更
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
