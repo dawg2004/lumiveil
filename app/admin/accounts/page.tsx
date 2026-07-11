@@ -33,6 +33,9 @@ export default function AdminAccountsPage() {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [status, setStatus] = useState("");
 
+  const [confirmingEmails, setConfirmingEmails] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState("");
+
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
@@ -190,6 +193,22 @@ export default function AdminAccountsPage() {
     }
   }, [loadKeywords, newKeyword, newKeywordReason]);
 
+  const confirmAllEmails = useCallback(async () => {
+    setConfirmingEmails(true);
+    setConfirmStatus("");
+    try {
+      const res = await fetch("/api/admin/confirm-emails", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "失敗しました");
+      setConfirmStatus(data.message ?? "完了しました。");
+      await loadAccounts();
+    } catch (error) {
+      setConfirmStatus(error instanceof Error ? error.message : "メール確認に失敗しました");
+    } finally {
+      setConfirmingEmails(false);
+    }
+  }, [loadAccounts]);
+
   const deleteKeyword = useCallback(async (id: string) => {
     setKeywordStatus("");
     try {
@@ -223,6 +242,13 @@ export default function AdminAccountsPage() {
             <button onClick={() => void loadAccounts()} disabled={loading} style={smallButtonStyle}>
               {loading ? "更新中..." : "更新"}
             </button>
+            <button
+              onClick={() => void confirmAllEmails()}
+              disabled={confirmingEmails}
+              style={{ ...smallButtonStyle, background: "#1a4a2e", border: "1px solid #2a7a4a", color: "#6ee7a0" }}
+            >
+              {confirmingEmails ? "処理中..." : "全員メール確認"}
+            </button>
           </div>
         </header>
 
@@ -236,6 +262,12 @@ export default function AdminAccountsPage() {
             <div style={metricValueStyle}>{totalCredits.toLocaleString("ja-JP")}</div>
           </div>
         </section>
+
+        {confirmStatus ? (
+          <div style={{ ...panelStyle, background: confirmStatus.includes("失敗") ? "#3a1a1a" : "#0d2e1e", color: confirmStatus.includes("失敗") ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: confirmStatus.includes("失敗") ? "#7a2a2a" : "#2a7a4a" }}>
+            {confirmStatus}
+          </div>
+        ) : null}
 
         {status ? (
           <div style={{ ...panelStyle, color: status.includes("権限") || status.includes("ログイン") || status.includes("失敗") ? "#b84242" : "#171717" }}>
