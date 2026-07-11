@@ -72,24 +72,42 @@ async function fetchAccounts() {
       .order("created_at", { ascending: false }),
   ]);
 
-  if (usersError) throw new Error(usersError.message);
+  if (usersError) {
+    console.error("auth.admin.listUsers error:", JSON.stringify(usersError), "URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50));
+  }
   if (shopsError) throw new Error(shopsError.message);
 
   const shopByUserId = new Map((shops ?? []).map(shop => [shop.user_id, shop as ShopRecord]));
+  const authUsers = usersData?.users ?? [];
 
-  return (usersData.users ?? []).map(authUser => {
-    const shop = shopByUserId.get(authUser.id);
-    return {
-      id: authUser.id,
-      email: authUser.email ?? "",
-      created_at: authUser.created_at,
-      last_sign_in_at: authUser.last_sign_in_at ?? null,
-      shop_id: shop?.id ?? null,
-      shop_name: shop?.name ?? null,
-      plan: shop?.plan ?? "free",
-      credits: Number(shop?.credits ?? 0),
-    };
-  });
+  if (authUsers.length > 0) {
+    return authUsers.map(authUser => {
+      const shop = shopByUserId.get(authUser.id);
+      return {
+        id: authUser.id,
+        email: authUser.email ?? "",
+        created_at: authUser.created_at,
+        last_sign_in_at: authUser.last_sign_in_at ?? null,
+        shop_id: shop?.id ?? null,
+        shop_name: shop?.name ?? null,
+        plan: shop?.plan ?? "free",
+        credits: Number(shop?.credits ?? 0),
+      };
+    });
+  }
+
+  // auth.admin.listUsers が空の場合（新キーフォーマット非対応など）shops テーブルから代替取得
+  console.warn("auth.admin.listUsers returned 0, falling back to shops. URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 50));
+  return (shops ?? []).map(shop => ({
+    id: shop.user_id ?? shop.id,
+    email: shop.name ?? "",
+    created_at: shop.created_at ?? new Date().toISOString(),
+    last_sign_in_at: null as string | null,
+    shop_id: shop.id,
+    shop_name: shop.name,
+    plan: shop.plan ?? "free",
+    credits: Number(shop.credits ?? 0),
+  }));
 }
 
 async function ensureShopForUser(userId: string, email: string) {
