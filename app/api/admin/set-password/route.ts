@@ -20,63 +20,37 @@ async function requireAdmin(req: NextRequest) {
   };
 }
 
-async function findUserIdByEmail(email: string): Promise<string | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  try {
-    const res = await fetch(
-      `${supabaseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}&per_page=10`,
-      { headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey } }
-    );
-    if (!res.ok) return null;
-    const data = await res.json() as { users?: Array<{ id: string; email: string }> };
-    return data.users?.find(u => u.email === email)?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
   try {
-    const { userId, email, password } = await req.json() as {
-      userId?: string;
+    const { email, password } = await req.json() as {
       email?: string;
       password?: string;
     };
 
+    if (!email) {
+      return NextResponse.json({ error: "email は必須です" }, { status: 400 });
+    }
     if (!password || password.length < 6) {
       return NextResponse.json({ error: "パスワードは6文字以上にしてください" }, { status: 400 });
     }
 
-    const adminClient = getAdminClient();
+    const { data, error } = await getAdminClient().rpc("admin_update_user_password", {
+      p_email: email,
+      p_password: password,
+    });
 
-    // Try by userId first
-    if (userId) {
-      const { error } = await adminClient.auth.admin.updateUserById(userId, { password });
-      if (!error) {
-        return NextResponse.json({ success: true, message: "パスワードを更新しました。" });
-      }
-      if (error.message !== "User not found") {
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Fallback: look up by email
-    if (email) {
-      const realId = await findUserIdByEmail(email);
-      if (realId) {
-        const { error } = await adminClient.auth.admin.updateUserById(realId, { password });
-        if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-        return NextResponse.json({ success: true, message: "パスワードを更新しました。" });
-      }
+    if (!data) {
+      return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
     }
 
-    return NextResponse.json({ error: "ユーザーが見つかりません" }, { status: 404 });
+    return NextResponse.json({ success: true, message: "パスワードを更新しました。" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "パスワード更新に失敗しました";
     console.error("set-password failed:", message);
