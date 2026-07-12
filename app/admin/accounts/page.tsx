@@ -247,7 +247,11 @@ export default function AdminAccountsPage() {
   const runDebugFix = useCallback(async (userId: string) => {
     const account = accounts.find(a => a.id === userId);
     if (!account) return;
-    const password = pwDrafts[userId] ?? "";
+    const password = window.prompt(
+      `${account.email} に設定する新しいパスワードを入力してください（6文字以上）。\nこのパスワードでログインできるよう修復します。`,
+      "Test1234"
+    );
+    if (password === null) return; // cancelled
     setDebugRunningId(userId);
     setDebugResult("");
     try {
@@ -263,7 +267,7 @@ export default function AdminAccountsPage() {
     } finally {
       setDebugRunningId(null);
     }
-  }, [accounts, pwDrafts]);
+  }, [accounts]);
 
   const deleteKeyword = useCallback(async (id: string) => {
     setKeywordStatus("");
