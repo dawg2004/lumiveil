@@ -42,6 +42,9 @@ export default function AdminAccountsPage() {
   const [pwStatus, setPwStatus] = useState("");
   const [pwIsError, setPwIsError] = useState(false);
 
+  const [debugRunningId, setDebugRunningId] = useState<string | null>(null);
+  const [debugResult, setDebugResult] = useState<string>("");
+
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
@@ -241,6 +244,27 @@ export default function AdminAccountsPage() {
     }
   }, [accounts, pwDrafts]);
 
+  const runDebugFix = useCallback(async (userId: string) => {
+    const account = accounts.find(a => a.id === userId);
+    if (!account) return;
+    const password = pwDrafts[userId] ?? "";
+    setDebugRunningId(userId);
+    setDebugResult("");
+    try {
+      const res = await fetch("/api/admin/debug-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: account.email, password: password || undefined, fix: !!password }),
+      });
+      const data = await res.json();
+      setDebugResult(JSON.stringify(data, null, 2));
+    } catch (error) {
+      setDebugResult(error instanceof Error ? error.message : "診断に失敗しました");
+    } finally {
+      setDebugRunningId(null);
+    }
+  }, [accounts, pwDrafts]);
+
   const deleteKeyword = useCallback(async (id: string) => {
     setKeywordStatus("");
     try {
@@ -304,6 +328,16 @@ export default function AdminAccountsPage() {
         {pwStatus ? (
           <div style={{ ...panelStyle, background: pwIsError ? "#3a1a1a" : "#0d2e1e", color: pwIsError ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: pwIsError ? "#7a2a2a" : "#2a7a4a" }}>
             {pwStatus}
+          </div>
+        ) : null}
+
+        {debugResult ? (
+          <div style={{ ...panelStyle, background: "#0b1a24", border: "1px solid #244a5a" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ color: "#93c5fd", fontSize: 12, fontWeight: 600 }}>認証診断結果</div>
+              <button onClick={() => setDebugResult("")} style={{ ...smallButtonStyle }}>閉じる</button>
+            </div>
+            <pre style={{ margin: 0, color: "#cbd5e1", fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{debugResult}</pre>
           </div>
         ) : null}
 
@@ -435,12 +469,21 @@ export default function AdminAccountsPage() {
                             </div>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => { setPwEditId(account.id); setPwStatus(""); }}
-                            style={{ ...miniActionButtonStyle, background: "#1e2d3e", border: "1px solid #334155", color: "#93c5fd" }}
-                          >
-                            PW変更
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <button
+                              onClick={() => { setPwEditId(account.id); setPwStatus(""); }}
+                              style={{ ...miniActionButtonStyle, background: "#1e2d3e", border: "1px solid #334155", color: "#93c5fd" }}
+                            >
+                              PW変更
+                            </button>
+                            <button
+                              onClick={() => void runDebugFix(account.id)}
+                              disabled={debugRunningId === account.id}
+                              style={{ ...miniActionButtonStyle, background: "#2a1e3e", border: "1px solid #4a3455", color: "#c9a8fd", fontSize: 10 }}
+                            >
+                              {debugRunningId === account.id ? "診断中..." : "🔧診断＆修復"}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
