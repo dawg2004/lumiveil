@@ -45,6 +45,10 @@ export default function AdminAccountsPage() {
   const [debugRunningId, setDebugRunningId] = useState<string | null>(null);
   const [debugResult, setDebugResult] = useState<string>("");
 
+  const [fixingInstance, setFixingInstance] = useState(false);
+  const [fixInstanceStatus, setFixInstanceStatus] = useState("");
+  const [fixInstanceError, setFixInstanceError] = useState(false);
+
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
@@ -244,6 +248,24 @@ export default function AdminAccountsPage() {
     }
   }, [accounts, pwDrafts]);
 
+  const fixInstanceIds = useCallback(async () => {
+    setFixingInstance(true);
+    setFixInstanceStatus("");
+    setFixInstanceError(false);
+    try {
+      const res = await fetch("/api/admin/fix-instance", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error ?? "修復に失敗しました");
+      setFixInstanceStatus(data.message ?? "修復しました。");
+      await loadAccounts();
+    } catch (error) {
+      setFixInstanceError(true);
+      setFixInstanceStatus(error instanceof Error ? error.message : "修復に失敗しました");
+    } finally {
+      setFixingInstance(false);
+    }
+  }, [loadAccounts]);
+
   const runDebugFix = useCallback(async (userId: string) => {
     const account = accounts.find(a => a.id === userId);
     if (!account) return;
@@ -309,8 +331,21 @@ export default function AdminAccountsPage() {
             >
               {confirmingEmails ? "処理中..." : "全員メール確認"}
             </button>
+            <button
+              onClick={() => void fixInstanceIds()}
+              disabled={fixingInstance}
+              style={{ ...smallButtonStyle, background: "#4a1a1a", border: "1px solid #a94444", color: "#ffb4b4", fontWeight: 700 }}
+            >
+              {fixingInstance ? "修復中..." : "🔧 ログイン不可を修復"}
+            </button>
           </div>
         </header>
+
+        {fixInstanceStatus ? (
+          <div style={{ ...panelStyle, background: fixInstanceError ? "#3a1a1a" : "#0d2e1e", color: fixInstanceError ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: fixInstanceError ? "#7a2a2a" : "#2a7a4a", fontWeight: 600 }}>
+            {fixInstanceStatus}
+          </div>
+        ) : null}
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div style={panelStyle}>
