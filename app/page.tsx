@@ -9,7 +9,7 @@ type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | 
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
-type VideoModel = "grok" | "grok_v15" | "seedance" | "atlas_turbo";
+type VideoModel = "grok" | "grok_v15" | "seedance" | "atlas_turbo" | "atlas_wan26";
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
 type RegisteredAvatar = {
@@ -1058,19 +1058,21 @@ export default function Home() {
     videoPollErrorCountRef.current = 0;
     videoPollErrorCountRef2.current = 0;
 
-    if (videoModel === "atlas_turbo") {
-      setVideoStatus("Wan-2.2 Turbo で生成中... (最大5分かかる場合があります)");
+    if (videoModel === "atlas_turbo" || videoModel === "atlas_wan26") {
+      const label = videoModel === "atlas_turbo" ? "Wan-2.2 Turbo" : "Wan-2.6";
+      setVideoStatus(`${label} で生成中... (最大5分かかる場合があります)`);
       try {
         const formData = new FormData();
         formData.append("file", videoFile);
         formData.append("prompt", videoPrompt);
         formData.append("duration", String(videoDuration));
         formData.append("resolution", videoResolution);
+        formData.append("variant", videoModel === "atlas_turbo" ? "turbo" : "wan26");
         const token = await getAuthToken();
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch("/api/atlascloud-video", { method: "POST", headers, body: formData });
         const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error ?? "Wan-2.2 Turbo動画生成に失敗しました");
+        if (!res.ok || data.error) throw new Error(data.error ?? `${label}動画生成に失敗しました`);
         setVideoResult(data.url);
         lastSavedVideoResultRef.current = data.url;
         if (data.credits != null) setCredits(data.credits);
@@ -3190,7 +3192,7 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
-                    {(["grok", "grok_v15", "seedance", "atlas_turbo"] as VideoModel[]).map(id => (
+                    {(["grok", "grok_v15", "seedance", "atlas_turbo", "atlas_wan26"] as VideoModel[]).map(id => (
                       <button
                         key={id}
                         onClick={() => {
@@ -3202,12 +3204,16 @@ export default function Home() {
                           if (id !== "atlas_turbo" && videoDuration === 8) setVideoDuration(5);
                           // atlas_turbo以外は1080p非対応なので選択中なら720pに戻す
                           if (id !== "atlas_turbo" && videoResolution === "1080p") setVideoResolution("720p");
+                          // atlas_wan26 は 480p 非対応なので選択中なら720pに戻す
+                          if (id === "atlas_wan26" && videoResolution === "480p") setVideoResolution("720p");
+                          // atlas_wan26 以外は 1080p-sr/1440p-sr 非対応なので選択中なら720pに戻す
+                          if (id !== "atlas_wan26" && (videoResolution === "1080p-sr" || videoResolution === "1440p-sr")) setVideoResolution("720p");
                           // Grok以外に切り替えたらstitchモードをリセット
                           if (id !== "grok_v15") setVideoStitchMode(false);
                         }}
                         style={choiceButtonStyle(videoModel === id)}
                       >
-                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : id === "seedance" ? "Seedance 2" : "Wan-2.2 Turbo"}
+                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : id === "seedance" ? "Seedance 2" : id === "atlas_turbo" ? "Wan-2.2 Turbo" : "Wan-2.6"}
                       </button>
                     ))}
                   </div>
@@ -3218,7 +3224,9 @@ export default function Home() {
                         ? "xAI Grok Imagine v1.5 — $0.08/s (480p) · $0.14/s (720p)"
                         : videoModel === "seedance"
                           ? "ByteDance Seedance 2.0 Fast — $0.2419/s · Standard — $0.3024/s"
-                          : "AtlasCloud Wan-2.2 Turbo — rCM高速化 · 480p/720p/1080p対応"}
+                          : videoModel === "atlas_turbo"
+                            ? "AtlasCloud Wan-2.2 Turbo — rCM高速化 · 480p/720p/1080p対応"
+                            : "AtlasCloud Wan-2.6 — 表現力の高いモーション · 720p/1080p/1080p-sr/1440p-sr対応"}
                   </div>
                 </div>
 
@@ -3303,7 +3311,12 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>解像度</div>
                   <div style={buttonRowStyle}>
-                    {(videoModel === "atlas_turbo" ? ["480p", "720p", "1080p"] : ["480p", "720p"]).map(r => (
+                    {(videoModel === "atlas_turbo"
+                      ? ["480p", "720p", "1080p"]
+                      : videoModel === "atlas_wan26"
+                        ? ["720p", "1080p", "1080p-sr", "1440p-sr"]
+                        : ["480p", "720p"]
+                    ).map(r => (
                       <button key={r} onClick={() => setVideoResolution(r)} style={choiceButtonStyle(videoResolution === r)}>
                         {r}
                       </button>
@@ -3339,7 +3352,7 @@ export default function Home() {
                     {videoLoading ? "生成中..." : "動画を生成する"}
                   </button>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", textAlign: "center" }}>
-                    {videoModel === "atlas_turbo"
+                    {videoModel === "atlas_turbo" || videoModel === "atlas_wan26"
                       ? "推定コスト: クレジット1消費"
                       : `推定コスト: $${(videoDuration * (
                           videoModel === "grok"

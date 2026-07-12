@@ -10,8 +10,35 @@ export const maxDuration = 300;
 const FAL_KEY = process.env.FAL_API_KEY!;
 const ATLAS_KEY = process.env.ATLASCLOUD_API_KEY!;
 const ATLAS_BASE = "https://api.atlascloud.ai";
-const ATLAS_MODEL = "atlascloud/wan-2.2-turbo-spicy/image-to-video";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
+
+type VariantConfig = {
+  model: string;
+  label: string;
+  resolutions: string[];
+  durations: number[];
+  defaultResolution: string;
+  defaultDuration: number;
+};
+
+const VARIANTS: Record<string, VariantConfig> = {
+  turbo: {
+    model: "atlascloud/wan-2.2-turbo-spicy/image-to-video",
+    label: "Wan-2.2 Turbo",
+    resolutions: ["480p", "720p", "1080p"],
+    durations: [5, 8],
+    defaultResolution: "480p",
+    defaultDuration: 5,
+  },
+  wan26: {
+    model: "atlascloud/wan-2.6-spicy/image-to-video",
+    label: "Wan-2.6",
+    resolutions: ["720p", "1080p", "1080p-sr", "1440p-sr"],
+    durations: [5, 10, 15],
+    defaultResolution: "720p",
+    defaultDuration: 5,
+  },
+};
 
 function createBearerSupabaseClient(token: string) {
   return createClient(
@@ -66,7 +93,7 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
   return nextCredits;
 }
 
-async function saveHistory(adminClient: SupabaseClient, userId: string, prompt: string, url: string) {
+async function saveHistory(adminClient: SupabaseClient, userId: string, label: string, prompt: string, url: string) {
   const { data: shop } = await adminClient.from("shops").select("id").eq("user_id", userId).maybeSingle();
   const shopId = shop?.id ?? userId;
 
@@ -80,7 +107,7 @@ async function saveHistory(adminClient: SupabaseClient, userId: string, prompt: 
 
   await adminClient.from("generation_history").insert({
     shop_id: shopId,
-    prompt: `${HISTORY_PREFIX}${JSON.stringify({ kind: "video", prompt: `Wan-2.2 Turbo動画: ${prompt}`, url })}`,
+    prompt: `${HISTORY_PREFIX}${JSON.stringify({ kind: "video", prompt: `${label}動画: ${prompt}`, url })}`,
     image_urls: [url],
     settings: { media_type: "video" },
     credits_used: 1,
@@ -129,12 +156,17 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file");
     const prompt = String(formData.get("prompt") ?? "").trim();
-    const resolution = String(formData.get("resolution") ?? "480p");
-    const duration = Number(formData.get("duration") ?? 5) === 8 ? 8 : 5;
+    const variantKey = String(formData.get("variant") ?? "turbo");
+    const variant = VARIANTS[variantKey];
+    if (!variant) return NextResponse.json({ error: "variant が不正です" }, { status: 400 });
+
+    const resolution = String(formData.get("resolution") ?? variant.defaultResolution);
+    const durationRaw = Number(formData.get("duration") ?? variant.defaultDuration);
+    const duration = variant.durations.includes(durationRaw) ? durationRaw : variant.defaultDuration;
 
     if (!(file instanceof File)) return NextResponse.json({ error: "file が必要です" }, { status: 400 });
     if (!prompt) return NextResponse.json({ error: "prompt が必要です" }, { status: 400 });
-    if (!["480p", "720p", "1080p"].includes(resolution)) {
+    if (!variant.resolutions.includes(resolution)) {
       return NextResponse.json({ error: "resolution が不正です" }, { status: 400 });
     }
 
@@ -147,7 +179,7 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${ATLAS_KEY}`,
       },
       body: JSON.stringify({
-        model: ATLAS_MODEL,
+        model: variant.model,
         image: imageUrl,
         prompt,
         resolution,
@@ -175,7 +207,7 @@ export async function POST(req: NextRequest) {
     }
 
     const adminClient = createAdminSupabaseClient();
-    await saveHistory(adminClient, user.id, prompt, url);
+    await saveHistory(adminClient, user.id, variant.label, prompt, url);
     const credits = await decrementCredits(adminClient, shop.id, currentCredits);
 
     return NextResponse.json({ url, credits });
