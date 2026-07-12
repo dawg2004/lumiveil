@@ -42,13 +42,6 @@ export default function AdminAccountsPage() {
   const [pwStatus, setPwStatus] = useState("");
   const [pwIsError, setPwIsError] = useState(false);
 
-  const [debugRunningId, setDebugRunningId] = useState<string | null>(null);
-  const [debugResult, setDebugResult] = useState<string>("");
-
-  const [fixingInstance, setFixingInstance] = useState(false);
-  const [fixInstanceStatus, setFixInstanceStatus] = useState("");
-  const [fixInstanceError, setFixInstanceError] = useState(false);
-
   const [keywords, setKeywords] = useState<BlockedKeyword[]>([]);
   const [keywordsLoading, setKeywordsLoading] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
@@ -248,49 +241,6 @@ export default function AdminAccountsPage() {
     }
   }, [accounts, pwDrafts]);
 
-  const fixInstanceIds = useCallback(async () => {
-    setFixingInstance(true);
-    setFixInstanceStatus("");
-    setFixInstanceError(false);
-    try {
-      const res = await fetch("/api/admin/fix-instance", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error ?? "修復に失敗しました");
-      setFixInstanceStatus(data.message ?? "修復しました。");
-      await loadAccounts();
-    } catch (error) {
-      setFixInstanceError(true);
-      setFixInstanceStatus(error instanceof Error ? error.message : "修復に失敗しました");
-    } finally {
-      setFixingInstance(false);
-    }
-  }, [loadAccounts]);
-
-  const runDebugFix = useCallback(async (userId: string) => {
-    const account = accounts.find(a => a.id === userId);
-    if (!account) return;
-    const password = window.prompt(
-      `${account.email} に設定する新しいパスワードを入力してください（6文字以上）。\nこのパスワードでログインできるよう修復します。`,
-      "Test1234"
-    );
-    if (password === null) return; // cancelled
-    setDebugRunningId(userId);
-    setDebugResult("");
-    try {
-      const res = await fetch("/api/admin/debug-auth", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: account.email, password: password || undefined, fix: !!password }),
-      });
-      const data = await res.json();
-      setDebugResult(JSON.stringify(data, null, 2));
-    } catch (error) {
-      setDebugResult(error instanceof Error ? error.message : "診断に失敗しました");
-    } finally {
-      setDebugRunningId(null);
-    }
-  }, [accounts]);
-
   const deleteKeyword = useCallback(async (id: string) => {
     setKeywordStatus("");
     try {
@@ -331,21 +281,8 @@ export default function AdminAccountsPage() {
             >
               {confirmingEmails ? "処理中..." : "全員メール確認"}
             </button>
-            <button
-              onClick={() => void fixInstanceIds()}
-              disabled={fixingInstance}
-              style={{ ...smallButtonStyle, background: "#4a1a1a", border: "1px solid #a94444", color: "#ffb4b4", fontWeight: 700 }}
-            >
-              {fixingInstance ? "修復中..." : "🔧 ログイン不可を修復"}
-            </button>
           </div>
         </header>
-
-        {fixInstanceStatus ? (
-          <div style={{ ...panelStyle, background: fixInstanceError ? "#3a1a1a" : "#0d2e1e", color: fixInstanceError ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: fixInstanceError ? "#7a2a2a" : "#2a7a4a", fontWeight: 600 }}>
-            {fixInstanceStatus}
-          </div>
-        ) : null}
 
         <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div style={panelStyle}>
@@ -367,16 +304,6 @@ export default function AdminAccountsPage() {
         {pwStatus ? (
           <div style={{ ...panelStyle, background: pwIsError ? "#3a1a1a" : "#0d2e1e", color: pwIsError ? "#e07070" : "#6ee7a0", border: "1px solid", borderColor: pwIsError ? "#7a2a2a" : "#2a7a4a" }}>
             {pwStatus}
-          </div>
-        ) : null}
-
-        {debugResult ? (
-          <div style={{ ...panelStyle, background: "#0b1a24", border: "1px solid #244a5a" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ color: "#93c5fd", fontSize: 12, fontWeight: 600 }}>認証診断結果</div>
-              <button onClick={() => setDebugResult("")} style={{ ...smallButtonStyle }}>閉じる</button>
-            </div>
-            <pre style={{ margin: 0, color: "#cbd5e1", fontSize: 11, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{debugResult}</pre>
           </div>
         ) : null}
 
@@ -508,21 +435,12 @@ export default function AdminAccountsPage() {
                             </div>
                           </div>
                         ) : (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <button
-                              onClick={() => { setPwEditId(account.id); setPwStatus(""); }}
-                              style={{ ...miniActionButtonStyle, background: "#1e2d3e", border: "1px solid #334155", color: "#93c5fd" }}
-                            >
-                              PW変更
-                            </button>
-                            <button
-                              onClick={() => void runDebugFix(account.id)}
-                              disabled={debugRunningId === account.id}
-                              style={{ ...miniActionButtonStyle, background: "#2a1e3e", border: "1px solid #4a3455", color: "#c9a8fd", fontSize: 10 }}
-                            >
-                              {debugRunningId === account.id ? "診断中..." : "🔧診断＆修復"}
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => { setPwEditId(account.id); setPwStatus(""); }}
+                            style={{ ...miniActionButtonStyle, background: "#1e2d3e", border: "1px solid #334155", color: "#93c5fd" }}
+                          >
+                            PW変更
+                          </button>
                         )}
                       </td>
                     </tr>
