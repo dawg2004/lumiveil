@@ -9,7 +9,13 @@ type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | 
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
-type VideoModel = "grok" | "grok_v15" | "seedance" | "atlas_turbo" | "atlas_wan26";
+type VideoModel = "grok" | "grok_v15" | "seedance" | "atlas_turbo" | "atlas_wan26" | "atlas_wan26_flash";
+
+const ATLAS_VIDEO_VARIANTS: Partial<Record<VideoModel, { variant: string; label: string }>> = {
+  atlas_turbo: { variant: "turbo", label: "Wan-2.2 Turbo" },
+  atlas_wan26: { variant: "wan26", label: "Wan-2.6" },
+  atlas_wan26_flash: { variant: "wan26_flash", label: "Wan-2.6 Flash" },
+};
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
 type RegisteredAvatar = {
@@ -1058,8 +1064,9 @@ export default function Home() {
     videoPollErrorCountRef.current = 0;
     videoPollErrorCountRef2.current = 0;
 
-    if (videoModel === "atlas_turbo" || videoModel === "atlas_wan26") {
-      const label = videoModel === "atlas_turbo" ? "Wan-2.2 Turbo" : "Wan-2.6";
+    const atlasVariant = ATLAS_VIDEO_VARIANTS[videoModel];
+    if (atlasVariant) {
+      const { variant, label } = atlasVariant;
       setVideoStatus(`${label} で生成中... (最大5分かかる場合があります)`);
       try {
         const formData = new FormData();
@@ -1067,7 +1074,7 @@ export default function Home() {
         formData.append("prompt", videoPrompt);
         formData.append("duration", String(videoDuration));
         formData.append("resolution", videoResolution);
-        formData.append("variant", videoModel === "atlas_turbo" ? "turbo" : "wan26");
+        formData.append("variant", variant);
         const token = await getAuthToken();
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch("/api/atlascloud-video", { method: "POST", headers, body: formData });
@@ -3192,7 +3199,7 @@ export default function Home() {
                 <div style={panelStyle}>
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
-                    {(["grok", "grok_v15", "seedance", "atlas_turbo", "atlas_wan26"] as VideoModel[]).map(id => (
+                    {(["grok", "grok_v15", "seedance", "atlas_turbo", "atlas_wan26", "atlas_wan26_flash"] as VideoModel[]).map(id => (
                       <button
                         key={id}
                         onClick={() => {
@@ -3204,16 +3211,16 @@ export default function Home() {
                           if (id !== "atlas_turbo" && videoDuration === 8) setVideoDuration(5);
                           // atlas_turbo以外は1080p非対応なので選択中なら720pに戻す
                           if (id !== "atlas_turbo" && videoResolution === "1080p") setVideoResolution("720p");
-                          // atlas_wan26 は 480p 非対応なので選択中なら720pに戻す
-                          if (id === "atlas_wan26" && videoResolution === "480p") setVideoResolution("720p");
-                          // atlas_wan26 以外は 1080p-sr/1440p-sr 非対応なので選択中なら720pに戻す
+                          // atlas_wan26系は480p非対応なので選択中なら720pに戻す
+                          if ((id === "atlas_wan26" || id === "atlas_wan26_flash") && videoResolution === "480p") setVideoResolution("720p");
+                          // atlas_wan26以外は1080p-sr/1440p-sr非対応なので選択中なら720pに戻す
                           if (id !== "atlas_wan26" && (videoResolution === "1080p-sr" || videoResolution === "1440p-sr")) setVideoResolution("720p");
                           // Grok以外に切り替えたらstitchモードをリセット
                           if (id !== "grok_v15") setVideoStitchMode(false);
                         }}
                         style={choiceButtonStyle(videoModel === id)}
                       >
-                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : id === "seedance" ? "Seedance 2" : id === "atlas_turbo" ? "Wan-2.2 Turbo" : "Wan-2.6"}
+                        {id === "grok" ? "Grok" : id === "grok_v15" ? "Grok v1.5" : id === "seedance" ? "Seedance 2" : id === "atlas_turbo" ? "Wan-2.2 Turbo" : id === "atlas_wan26" ? "Wan-2.6" : "Wan-2.6 Flash"}
                       </button>
                     ))}
                   </div>
@@ -3226,7 +3233,9 @@ export default function Home() {
                           ? "ByteDance Seedance 2.0 Fast — $0.2419/s · Standard — $0.3024/s"
                           : videoModel === "atlas_turbo"
                             ? "AtlasCloud Wan-2.2 Turbo — rCM高速化 · 480p/720p/1080p対応"
-                            : "AtlasCloud Wan-2.6 — 表現力の高いモーション · 720p/1080p/1080p-sr/1440p-sr対応"}
+                            : videoModel === "atlas_wan26_flash"
+                              ? "AtlasCloud Wan-2.6 Flash — 高速・低コスト · マルチカメラ演出対応 · 720p/1080p対応"
+                              : "AtlasCloud Wan-2.6 — 表現力の高いモーション · 720p/1080p/1080p-sr/1440p-sr対応"}
                   </div>
                 </div>
 
@@ -3315,7 +3324,9 @@ export default function Home() {
                       ? ["480p", "720p", "1080p"]
                       : videoModel === "atlas_wan26"
                         ? ["720p", "1080p", "1080p-sr", "1440p-sr"]
-                        : ["480p", "720p"]
+                        : videoModel === "atlas_wan26_flash"
+                          ? ["720p", "1080p"]
+                          : ["480p", "720p"]
                     ).map(r => (
                       <button key={r} onClick={() => setVideoResolution(r)} style={choiceButtonStyle(videoResolution === r)}>
                         {r}
@@ -3352,7 +3363,7 @@ export default function Home() {
                     {videoLoading ? "生成中..." : "動画を生成する"}
                   </button>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", textAlign: "center" }}>
-                    {videoModel === "atlas_turbo" || videoModel === "atlas_wan26"
+                    {ATLAS_VIDEO_VARIANTS[videoModel]
                       ? "推定コスト: クレジット1消費"
                       : `推定コスト: $${(videoDuration * (
                           videoModel === "grok"

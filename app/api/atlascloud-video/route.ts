@@ -38,6 +38,14 @@ const VARIANTS: Record<string, VariantConfig> = {
     defaultResolution: "720p",
     defaultDuration: 5,
   },
+  wan26_flash: {
+    model: "alibaba/wan-2.6/image-to-video-flash",
+    label: "Wan-2.6 Flash",
+    resolutions: ["720p", "1080p"],
+    durations: [5, 10, 15],
+    defaultResolution: "720p",
+    defaultDuration: 5,
+  },
 };
 
 function createBearerSupabaseClient(token: string) {
