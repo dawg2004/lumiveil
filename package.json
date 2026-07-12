@@ -18,6 +18,7 @@
     "@vladmandic/face-api": "^1.7.15",
     "canvas": "^3.2.2",
     "next": "^16.2.6",
+    "pg": "^8.13.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "stripe": "^20.4.1"
