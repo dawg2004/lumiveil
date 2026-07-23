@@ -178,6 +178,20 @@ function BlockedKeywordWarning({ prompt, keywords }: { prompt: string; keywords:
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function parseJsonResponse(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    if (res.status === 413) {
+      return { error: "ファイルサイズが大きすぎます。画像や動画のサイズを小さくして再度お試しください。" };
+    }
+    return { error: `サーバーエラーが発生しました (${res.status})` };
+  }
+}
+
 export default function Home() {
   const [tab, setTab] = useState<TabId>("generate");
   const [mosaicSrc, setMosaicSrc] = useState<string | null>(null);
@@ -514,7 +528,7 @@ export default function Home() {
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch("/api/favorites", { headers });
       if (!res.ok) return;
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       setPromptFavorites(data.favorites ?? []);
     } catch { /* ignore */ }
   }, [getAuthToken]);
@@ -560,7 +574,7 @@ export default function Home() {
       const res = await fetch("/api/credits", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "クレジット残高を取得できませんでした");
       }
@@ -590,7 +604,7 @@ export default function Home() {
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
 
       const res = await fetch(`/api/history?page=${page}&pageSize=500`, { headers });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "履歴を取得できませんでした");
       }
@@ -634,7 +648,7 @@ export default function Home() {
         },
         body: JSON.stringify({ ids: selectedHistoryIds }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "履歴の削除に失敗しました");
       }
@@ -703,7 +717,7 @@ export default function Home() {
           headers,
           body: JSON.stringify({ inviteCode }),
         });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) {
           throw new Error(data.error ?? "招待コードを適用できませんでした");
         }
@@ -719,7 +733,7 @@ export default function Home() {
         headers,
         body: JSON.stringify({ packId, inviteCode }),
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         if (res.status === 401) {
           throw new Error("ログイン状態が切れています。もう一度ログインしてからチャージしてください。");
@@ -747,7 +761,7 @@ export default function Home() {
       const res = await fetch("/api/avatar", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "キャスト一覧を取得できませんでした");
       }
@@ -795,7 +809,7 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "キャスト登録に失敗しました");
       }
@@ -892,7 +906,7 @@ export default function Home() {
         const token = await getAuthToken();
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch("/api/atlascloud-edit", { method: "POST", headers, body: formData });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "Wan-2.6編集に失敗しました");
         setEditResult(data.url);
         lastSavedEditResultRef.current = data.url;
@@ -904,7 +918,7 @@ export default function Home() {
         formData.append("model", editModel);
         formData.append("resolution", editResolution);
         const res = await fetch("/api/edit", { method: "POST", body: formData });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "編集に失敗しました");
         setEditResult(data.url);
         lastSavedEditResultRef.current = data.url;
@@ -939,7 +953,7 @@ export default function Home() {
       if (token) headers["Authorization"] = `Bearer ${token}`;
       setFaceswapStatus("顔ハメ処理中...");
       const res = await fetch("/api/faceswap", { method: "POST", headers, body: formData });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) throw new Error(data.error ?? "顔ハメに失敗しました");
       setFaceswapResult(data.url);
       setFaceswapStatus("完成！");
@@ -975,7 +989,7 @@ export default function Home() {
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/analyze-image", { method: "POST", headers, body: formData });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) throw new Error(data.error ?? "解析に失敗しました");
       setAnalyzePrompt(data.prompt);
       setAnalyzePromptJa(data.promptJa ?? "");
@@ -1001,7 +1015,7 @@ export default function Home() {
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) throw new Error(data.error ?? "画像編集に失敗しました");
       setAnalyzeResult(data.url);
       setAnalyzeStatus("完成！");
@@ -1078,7 +1092,7 @@ export default function Home() {
         const token = await getAuthToken();
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await fetch("/api/atlascloud-video", { method: "POST", headers, body: formData });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? `${label}動画生成に失敗しました`);
         setVideoResult(data.url);
         lastSavedVideoResultRef.current = data.url;
@@ -1102,7 +1116,7 @@ export default function Home() {
       formData.append("duration", String(videoDuration));
       formData.append("resolution", videoResolution);
       const res = await fetch("/api/video", { method: "POST", body: formData });
-      const data = await res.json();
+      const data = await parseJsonResponse(res);
       if (!res.ok || data.error) throw new Error(data.error ?? "提出に失敗しました");
       setVideoRequestId(data.requestId);
       if (videoStitchMode && videoModel === "grok_v15") {
@@ -1114,7 +1128,7 @@ export default function Home() {
         formData2.append("duration", String(videoDuration));
         formData2.append("resolution", videoResolution);
         const res2 = await fetch("/api/video", { method: "POST", body: formData2 });
-        const data2 = await res2.json();
+        const data2 = await parseJsonResponse(res2);
         if (!res2.ok || data2.error) throw new Error(data2.error ?? "2本目の提出に失敗しました");
         setVideoRequestId2(data2.requestId);
         setVideoStatus("30秒動画を生成中（2本同時生成）...");
@@ -1139,7 +1153,7 @@ export default function Home() {
           resolution: videoResolution,
         });
         const res = await fetch(`/api/video?${params.toString()}`);
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) {
           throw new Error(data.error ?? "動画生成の状態確認に失敗しました");
         }
@@ -1203,7 +1217,7 @@ export default function Home() {
           resolution: videoResolution,
         });
         const res = await fetch(`/api/video?${params.toString()}`);
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "2本目の状態確認に失敗しました");
         videoPollErrorCountRef2.current = 0;
         if (data.status === "completed") {
@@ -1308,7 +1322,7 @@ export default function Home() {
           headers,
           body: JSON.stringify({ orderId }),
         });
-        const data = await res.json();
+        const data = await parseJsonResponse(res);
         if (!res.ok || data.error) {
           if (res.status === 401) {
             throw new Error("ログイン状態が切れています。もう一度ログインしてからPayPal決済を確定してください。");
