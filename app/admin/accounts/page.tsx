@@ -7,6 +7,7 @@ const TAB_LABELS: Record<GatedTab, string> = {
   generate: "画像生成",
   avatar: "キャスト登録",
   mosaic: "モザイク",
+  step: "ステップ生成",
   edit: "画像編集",
   faceswap: "顔ハメ",
   video: "動画生成",

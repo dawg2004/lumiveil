@@ -237,7 +237,8 @@ export default function GptsPage() {
       });
 
       if (!response.ok) {
-        throw new Error(TEXT.chatError);
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? TEXT.chatError);
       }
 
       const data = (await response.json()) as ChatResponse;
@@ -267,7 +268,11 @@ export default function GptsPage() {
     setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
 
     const imageUrl = URL.createObjectURL(file);
-    await postChat({ event: "user_photo_uploaded", imageUrl });
+    try {
+      await postChat({ event: "user_photo_uploaded", imageUrl });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : TEXT.chatError);
+    }
     event.target.value = "";
   }
 
@@ -277,15 +282,23 @@ export default function GptsPage() {
 
     setBackgroundFile(file);
     const backgroundImageUrl = URL.createObjectURL(file);
-    await postChat({
-      event: "background_photo_uploaded",
-      backgroundImageUrl,
-    });
+    try {
+      await postChat({
+        event: "background_photo_uploaded",
+        backgroundImageUrl,
+      });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : TEXT.chatError);
+    }
     event.target.value = "";
   }
 
   async function selectTool(tool: ToolType) {
-    await postChat({ event: "tool_selected", tool });
+    try {
+      await postChat({ event: "tool_selected", tool });
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : TEXT.chatError);
+    }
   }
 
   async function completeStep(resultImageUrl: string) {

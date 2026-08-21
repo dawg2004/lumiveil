@@ -51,6 +51,11 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string; href?: s
   { id: "mypage", label: "マイページ", mobileLabel: "設定" },
 ];
 
+const TAB_STORAGE_KEY = "lumiveil:last-tab";
+const VALID_TAB_IDS = new Set<TabId>([
+  "generate", "avatar", "mosaic", "step", "edit", "faceswap", "video", "analyze", "history", "plan", "mypage",
+]);
+
 const AREAS = ["顔全体", "目元のみ", "口元のみ"] as const;
 const STRENGTHS = ["弱", "中", "強", "最強"] as const;
 const NUDGE_STEP = 2;
@@ -1300,6 +1305,25 @@ export default function Home() {
   useEffect(() => {
     void loadCredits();
   }, [loadCredits]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+      if (stored && VALID_TAB_IDS.has(stored as TabId)) {
+        setTab(stored as TabId);
+      }
+    } catch {
+      // localStorage unavailable (private mode, etc.) — keep default tab
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(TAB_STORAGE_KEY, tab);
+    } catch {
+      // localStorage unavailable — ignore
+    }
+  }, [tab]);
 
   useEffect(() => {
     if (allowedTabs === null) return;

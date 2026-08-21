@@ -1,5 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 import { buildResponse } from "@/lib/chat-response";
 import {
   createSession,
@@ -13,7 +16,57 @@ function ensureSession(sessionId?: string): EditSession {
   return getSession(sessionId) ?? createSession();
 }
 
-export async function POST(req: Request) {
+function createBearerSupabaseClient(token: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      global: {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    }
+  );
+}
+
+async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User | null; client: SupabaseClient }> {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (token) {
+    const tokenSupabase = createBearerSupabaseClient(token);
+    const { data: { user } } = await tokenSupabase.auth.getUser(token);
+    if (user) return { user, client: tokenSupabase };
+  }
+
+  const cookieSupabase = await createServerSupabaseClient();
+  const { data: { user } } = await cookieSupabase.auth.getUser();
+  return { user, client: cookieSupabase };
+}
+
+async function getShopRecord(client: SupabaseClient, userId: string) {
+  const { data, error } = await client
+    .from("shops")
+    .select("id, credits, allowed_tabs, last_login_ip")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function POST(req: NextRequest) {
+  const { user, client } = await getAuthenticatedContext(req);
+  if (!user) {
+    return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
+  }
+
+  const shop = await getShopRecord(client, user.id);
+  if (!shop?.id) {
+    return NextResponse.json({ error: "ショップ情報が見つかりません。" }, { status: 400 });
+  }
+
+  const access = evaluateTabAccess(shop, "step", getRequestIp(req));
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
   const body = (await req.json()) as ChatRequest;
   let session = ensureSession(body.sessionId);
 
