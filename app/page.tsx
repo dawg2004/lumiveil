@@ -17,6 +17,15 @@ const ATLAS_VIDEO_VARIANTS: Partial<Record<VideoModel, { variant: string; label:
   atlas_wan26: { variant: "wan26", label: "Wan-2.6" },
   atlas_wan26_flash: { variant: "wan26_flash", label: "Wan-2.6 Flash" },
 };
+
+// 実費（ドル）をユーザー表示用クレジット数に自動換算する。
+// $0.09まで:1cr / $0.80まで:2cr / $1.30まで:3cr、以降は $0.5 刻みで+1cr。
+function priceToCredits(usd: number): number {
+  if (usd <= 0.09) return 1;
+  if (usd <= 0.8) return 2;
+  if (usd <= 1.3) return 3;
+  return 3 + Math.ceil((usd - 1.3) / 0.5);
+}
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
 type RegisteredAvatar = {
@@ -2855,7 +2864,7 @@ export default function Home() {
                       ))}
                     </div>
                     <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
-                      料金目安: 1K 約$0.06 / 2K 約$0.08。顔保持指定は入れていますが、顔固定専用モデルではありません。
+                      料金目安: {priceToCredits(editResolution === "1k" ? 0.06 : 0.08)}クレジット。顔保持指定は入れていますが、顔固定専用モデルではありません。
                     </div>
                   </div>
                 )}
@@ -3070,8 +3079,7 @@ export default function Home() {
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
                   <div style={{ fontSize: 11, color: "#6a6258", lineHeight: 1.7 }}>
-                    接続先: fal-ai/face-swap<br />
-                    料金目安: 約$0.05/枚（1クレジット）
+                    {priceToCredits(0.05)}クレジット
                   </div>
                 </div>
 
@@ -3270,11 +3278,11 @@ export default function Home() {
                   </div>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
                     {videoModel === "grok"
-                      ? "xAI Grok Imagine — $0.05/s (480p) · $0.07/s (720p)"
+                      ? "xAI Grok Imagine — 高速生成"
                       : videoModel === "grok_v15"
-                        ? "xAI Grok Imagine v1.5 — $0.08/s (480p) · $0.14/s (720p)"
+                        ? "xAI Grok Imagine v1.5 — 高品質・30秒ステッチ対応"
                         : videoModel === "seedance"
-                          ? "ByteDance Seedance 2.0 Fast — $0.2419/s · Standard — $0.3024/s"
+                          ? "ByteDance Seedance 2.0 Fast — 音声付き生成"
                           : videoModel === "atlas_turbo"
                             ? "AtlasCloud Wan-2.2 Turbo — rCM高速化 · 480p/720p/1080p対応"
                             : videoModel === "atlas_wan26_flash"
@@ -3408,14 +3416,14 @@ export default function Home() {
                   </button>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", textAlign: "center" }}>
                     {ATLAS_VIDEO_VARIANTS[videoModel]
-                      ? "推定コスト: クレジット1消費"
-                      : `推定コスト: $${(videoDuration * (
+                      ? "推定コスト: 1クレジット"
+                      : `推定コスト: ${priceToCredits(videoDuration * (
                           videoModel === "grok"
                             ? (videoResolution === "480p" ? 0.05 : 0.07)
                             : videoModel === "grok_v15"
                               ? (videoResolution === "480p" ? 0.08 : 0.14)
                               : 0.2419
-                        )).toFixed(2)}`}
+                        ))}クレジット`}
                   </div>
                 </div>
               </div>
