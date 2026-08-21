@@ -1,12 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 type Mode = 'login' | 'signup' | 'reset'
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -15,7 +23,16 @@ export default function LoginPage() {
   const [isError, setIsError] = useState(false)
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  useEffect(() => {
+    const incoming = searchParams.get('message')
+    if (incoming) {
+      setIsError(true)
+      setMessage(incoming)
+    }
+  }, [searchParams])
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -33,9 +50,19 @@ export default function LoginPage() {
       if (error) { setIsError(true); setMessage(error.message) }
       else setMessage('パスワードリセット用のメールを送信しました。メールをご確認ください。')
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) { setIsError(true); setMessage(error.message) }
-      else router.push('/')
+      else {
+        const token = data.session?.access_token
+        if (token) {
+          try {
+            await fetch('/api/session/touch', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+          } catch {
+            // 端末登録に失敗してもログイン自体はブロックしない
+          }
+        }
+        router.push('/')
+      }
     }
     setLoading(false)
   }

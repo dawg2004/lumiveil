@@ -1,6 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { GATED_TABS, type GatedTab } from "@/lib/access-control";
+
+const TAB_LABELS: Record<GatedTab, string> = {
+  generate: "画像生成",
+  avatar: "キャスト登録",
+  mosaic: "モザイク",
+  edit: "画像編集",
+  faceswap: "顔ハメ",
+  video: "動画生成",
+  analyze: "AI変換",
+};
 
 type BlockedKeyword = {
   id: string;
@@ -18,12 +29,15 @@ type AdminAccount = {
   shop_name: string | null;
   plan: string;
   credits: number;
+  allowed_tabs: string[];
+  last_login_ip: string | null;
 };
 
 type DraftMap = Record<string, {
   credits: string;
   plan: string;
   shop_name: string;
+  allowed_tabs: string[];
 }>;
 
 export default function AdminAccountsPage() {
@@ -61,6 +75,7 @@ export default function AdminAccountsPage() {
           credits: String(account.credits ?? 0),
           plan: account.plan ?? "free",
           shop_name: account.shop_name ?? account.email ?? "",
+          allowed_tabs: account.allowed_tabs ?? [],
         };
       }
       return next;
@@ -87,6 +102,7 @@ export default function AdminAccountsPage() {
               credits: String(account.credits ?? 0),
               plan: account.plan ?? "free",
               shop_name: account.shop_name ?? account.email ?? "",
+              allowed_tabs: account.allowed_tabs ?? [],
             },
           ])
         )
@@ -110,9 +126,28 @@ export default function AdminAccountsPage() {
         credits: current[id]?.credits ?? "0",
         plan: current[id]?.plan ?? "free",
         shop_name: current[id]?.shop_name ?? "",
+        allowed_tabs: current[id]?.allowed_tabs ?? [],
         [field]: value,
       },
     }));
+  }, []);
+
+  const toggleDraftTab = useCallback((id: string, tabKey: GatedTab) => {
+    setDrafts(current => {
+      const existing = current[id]?.allowed_tabs ?? [];
+      const nextTabs = existing.includes(tabKey)
+        ? existing.filter(t => t !== tabKey)
+        : [...existing, tabKey];
+      return {
+        ...current,
+        [id]: {
+          credits: current[id]?.credits ?? "0",
+          plan: current[id]?.plan ?? "free",
+          shop_name: current[id]?.shop_name ?? "",
+          allowed_tabs: nextTabs,
+        },
+      };
+    });
   }, []);
 
   const applyAccount = useCallback((account: AdminAccount) => {
@@ -125,6 +160,7 @@ export default function AdminAccountsPage() {
       credits: String(account.credits ?? 0),
       plan: account.plan ?? "free",
       shop_name: account.shop_name ?? account.email ?? "",
+      allowed_tabs: account.allowed_tabs ?? [],
     };
 
     setSavingId(account.id);
@@ -142,6 +178,7 @@ export default function AdminAccountsPage() {
           credits: Number(draft.credits || 0),
           plan: draft.plan,
           shopName: draft.shop_name,
+          allowedTabs: draft.allowed_tabs,
         }),
       });
       const data = await res.json();
@@ -327,6 +364,7 @@ export default function AdminAccountsPage() {
                   <th style={thStyle}>ショップ</th>
                   <th style={thStyle}>登録日</th>
                   <th style={thStyle}>最終ログイン</th>
+                  <th style={thStyle}>メニュー権限</th>
                   <th style={thStyle}>操作</th>
                   <th style={thStyle}>PW設定</th>
                 </tr>
@@ -337,6 +375,7 @@ export default function AdminAccountsPage() {
                     credits: String(account.credits ?? 0),
                     plan: account.plan ?? "free",
                     shop_name: account.shop_name ?? account.email ?? "",
+                    allowed_tabs: account.allowed_tabs ?? [],
                   };
                   const saving = savingId === account.id;
 
@@ -345,6 +384,9 @@ export default function AdminAccountsPage() {
                       <td style={tdStyle}>
                         <div>{account.email || "-"}</div>
                         <div style={{ marginTop: 6, fontSize: 10, color: "#6a6258" }}>{account.id}</div>
+                        {account.last_login_ip ? (
+                          <div style={{ marginTop: 4, fontSize: 10, color: "#8a7f6e" }}>最終IP: {account.last_login_ip}</div>
+                        ) : null}
                       </td>
                       <td style={tdStyle}>
                         <input
@@ -397,6 +439,21 @@ export default function AdminAccountsPage() {
                       </td>
                       <td style={tdStyle}>{formatDate(account.created_at)}</td>
                       <td style={tdStyle}>{account.last_sign_in_at ? formatDate(account.last_sign_in_at) : "-"}</td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 130 }}>
+                          {GATED_TABS.map(tabKey => (
+                            <label key={tabKey} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11 }}>
+                              <input
+                                type="checkbox"
+                                checked={draft.allowed_tabs.includes(tabKey)}
+                                onChange={() => toggleDraftTab(account.id, tabKey)}
+                                style={{ width: 13, height: 13, accentColor: "#c9a84c" }}
+                              />
+                              {TAB_LABELS[tabKey]}
+                            </label>
+                          ))}
+                        </div>
+                      </td>
                       <td style={tdStyle}>
                         <button
                           onClick={() => void saveAccount(account)}

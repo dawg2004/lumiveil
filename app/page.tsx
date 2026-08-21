@@ -4,6 +4,7 @@ import { detectFaceRegions, type FacePoint, type FaceRegions } from "@/lib/faceD
 import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { createClient } from "@/lib/supabase";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { GATED_TABS } from "@/lib/access-control";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage";
 type MosaicBox = { x: number; y: number; width: number; height: number };
@@ -266,6 +267,7 @@ export default function Home() {
   const [videoStitchPart2, setVideoStitchPart2] = useState<string | null>(null);
   const [videoStitchStatus, setVideoStitchStatus] = useState("");
   const [credits, setCredits] = useState<number | null>(null);
+  const [allowedTabs, setAllowedTabs] = useState<string[] | null>(null);
   const [topupLoadingPack, setTopupLoadingPack] = useState<TopupPackId | null>(null);
   const [topupStatus, setTopupStatus] = useState("");
   const [trialInviteCode, setTrialInviteCode] = useState("");
@@ -428,6 +430,24 @@ export default function Home() {
     []
   );
 
+  const getAuthToken = useCallback(async () => {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const now = Math.floor(Date.now() / 1000);
+    const session = data.session;
+
+    if (session?.access_token && (!session.expires_at || session.expires_at > now + 60)) {
+      return session.access_token;
+    }
+
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (error) {
+      return null;
+    }
+
+    return refreshed.session?.access_token ?? null;
+  }, []);
+
   const runMosaic = useCallback(
     async (mode: MosaicMode) => {
       if (!mosaicSrc || !mosaicBox) return;
@@ -486,9 +506,12 @@ export default function Home() {
           }
         }
 
-        const apiRes = await fetch("/api/mosaic", { method: "POST", body: formData });
+        const token = await getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const apiRes = await fetch("/api/mosaic", { method: "POST", headers, body: formData });
         if (!apiRes.ok) {
-          throw new Error("モザイク処理に失敗しました");
+          const errData = await parseJsonResponse(apiRes);
+          throw new Error(errData.error ?? "モザイク処理に失敗しました");
         }
 
         const resultBlob = await apiRes.blob();
@@ -501,26 +524,8 @@ export default function Home() {
         setMosaicLoading(false);
       }
     },
-    [buildAdjustedPolygon, mosaicArea, mosaicBox, mosaicRegions, mosaicSrc, mosaicStrength]
+    [buildAdjustedPolygon, mosaicArea, mosaicBox, mosaicRegions, mosaicSrc, mosaicStrength, getAuthToken]
   );
-
-  const getAuthToken = useCallback(async () => {
-    const supabase = createClient();
-    const { data } = await supabase.auth.getSession();
-    const now = Math.floor(Date.now() / 1000);
-    const session = data.session;
-
-    if (session?.access_token && (!session.expires_at || session.expires_at > now + 60)) {
-      return session.access_token;
-    }
-
-    const { data: refreshed, error } = await supabase.auth.refreshSession();
-    if (error) {
-      return null;
-    }
-
-    return refreshed.session?.access_token ?? null;
-  }, []);
 
   const loadFavorites = useCallback(async () => {
     try {
@@ -566,6 +571,12 @@ export default function Home() {
     } catch { /* ignore */ }
   }, [getAuthToken]);
 
+  const handleLogout = useCallback(async (message?: string) => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = message ? `/login?message=${encodeURIComponent(message)}` : "/login";
+  }, []);
+
   const loadCredits = useCallback(async () => {
     try {
       const token = await getAuthToken();
@@ -575,21 +586,22 @@ export default function Home() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await parseJsonResponse(res);
+
+      if (res.status === 401 && typeof data.error === "string" && data.error.includes("別の端末")) {
+        void handleLogout(data.error);
+        return;
+      }
+
       if (!res.ok || data.error) {
         throw new Error(data.error ?? "クレジット残高を取得できませんでした");
       }
 
       setCredits(Number(data.credits ?? 0));
+      setAllowedTabs(Array.isArray(data.allowedTabs) ? data.allowedTabs : []);
     } catch {
       setCredits(null);
     }
-  }, [getAuthToken]);
-
-  const handleLogout = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }, []);
+  }, [getAuthToken, handleLogout]);
 
   const loadHistory = useCallback(async (page = 1) => {
     setHistoryLoading(true);
@@ -1109,13 +1121,15 @@ export default function Home() {
 
     setVideoStatus("画像をアップロード中...");
     try {
+      const videoToken = await getAuthToken();
+      const videoHeaders: Record<string, string> = videoToken ? { Authorization: `Bearer ${videoToken}` } : {};
       const formData = new FormData();
       formData.append("file", videoFile);
       formData.append("model", videoModel);
       formData.append("prompt", videoPrompt);
       formData.append("duration", String(videoDuration));
       formData.append("resolution", videoResolution);
-      const res = await fetch("/api/video", { method: "POST", body: formData });
+      const res = await fetch("/api/video", { method: "POST", headers: videoHeaders, body: formData });
       const data = await parseJsonResponse(res);
       if (!res.ok || data.error) throw new Error(data.error ?? "提出に失敗しました");
       setVideoRequestId(data.requestId);
@@ -1127,7 +1141,7 @@ export default function Home() {
         formData2.append("prompt", videoPrompt);
         formData2.append("duration", String(videoDuration));
         formData2.append("resolution", videoResolution);
-        const res2 = await fetch("/api/video", { method: "POST", body: formData2 });
+        const res2 = await fetch("/api/video", { method: "POST", headers: videoHeaders, body: formData2 });
         const data2 = await parseJsonResponse(res2);
         if (!res2.ok || data2.error) throw new Error(data2.error ?? "2本目の提出に失敗しました");
         setVideoRequestId2(data2.requestId);
@@ -1152,7 +1166,9 @@ export default function Home() {
           duration: String(videoDuration),
           resolution: videoResolution,
         });
-        const res = await fetch(`/api/video?${params.toString()}`);
+        const pollToken = await getAuthToken();
+        const pollHeaders: Record<string, string> = pollToken ? { Authorization: `Bearer ${pollToken}` } : {};
+        const res = await fetch(`/api/video?${params.toString()}`, { headers: pollHeaders });
         const data = await parseJsonResponse(res);
         if (!res.ok || data.error) {
           throw new Error(data.error ?? "動画生成の状態確認に失敗しました");
@@ -1201,7 +1217,7 @@ export default function Home() {
     void pollVideoStatus();
     videoPollRef.current = setInterval(() => void pollVideoStatus(), 5000);
     return () => { if (videoPollRef.current) clearInterval(videoPollRef.current); };
-  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory]);
+  }, [videoDuration, videoModel, videoPrompt, videoRequestId, videoResolution, loadHistory, getAuthToken]);
 
   // stitch 2本目ポーリング
   useEffect(() => {
@@ -1216,7 +1232,9 @@ export default function Home() {
           duration: String(videoDuration),
           resolution: videoResolution,
         });
-        const res = await fetch(`/api/video?${params.toString()}`);
+        const pollToken2 = await getAuthToken();
+        const pollHeaders2: Record<string, string> = pollToken2 ? { Authorization: `Bearer ${pollToken2}` } : {};
+        const res = await fetch(`/api/video?${params.toString()}`, { headers: pollHeaders2 });
         const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "2本目の状態確認に失敗しました");
         videoPollErrorCountRef2.current = 0;
@@ -1249,7 +1267,7 @@ export default function Home() {
     void pollVideo2();
     videoPollRef2.current = setInterval(() => void pollVideo2(), 5000);
     return () => { if (videoPollRef2.current) clearInterval(videoPollRef2.current); };
-  }, [videoDuration, videoModel, videoPrompt, videoRequestId2, videoResolution]);
+  }, [videoDuration, videoModel, videoPrompt, videoRequestId2, videoResolution, getAuthToken]);
 
   // stitch: 両方完了したらloadingを解除
   useEffect(() => {
@@ -1275,6 +1293,14 @@ export default function Home() {
   useEffect(() => {
     void loadCredits();
   }, [loadCredits]);
+
+  useEffect(() => {
+    if (allowedTabs === null) return;
+    const isGated = (GATED_TABS as readonly string[]).includes(tab);
+    if (isGated && !allowedTabs.includes(tab)) {
+      setTab("history");
+    }
+  }, [allowedTabs, tab]);
 
   useEffect(() => {
     void loadFavorites();
@@ -1345,6 +1371,11 @@ export default function Home() {
       <div style={{ fontSize: 13, color: "#b8c0c4", lineHeight: 1.8 }}>{body}</div>
     </div>
   );
+
+  const visibleNavItems = NAV_ITEMS.filter(item => {
+    if (!(GATED_TABS as readonly string[]).includes(item.id)) return true;
+    return (allowedTabs ?? []).includes(item.id);
+  });
 
   return (
     <div style={{ minHeight: "100vh", background: "#071e28", color: "#f0ece4", fontFamily: "var(--font-lumiveil-sans)" }}>
@@ -1496,7 +1527,7 @@ export default function Home() {
               boxShadow: "18px 0 42px rgba(0,0,0,0.32)",
             }}
           >
-            {NAV_ITEMS.map(item => (
+            {visibleNavItems.map(item => (
               <button
                 key={item.id}
                 onClick={() => {
@@ -1528,7 +1559,7 @@ export default function Home() {
 
       <div style={{ display: "flex", minHeight: "calc(100vh - 48px)" }}>
         <div className="sidebar" style={{ width: 168, background: "#071e28", borderRight: "1px solid #163645", flexDirection: "column", padding: "12px 0", flexShrink: 0 }}>
-          {NAV_ITEMS.map(item => (
+          {visibleNavItems.map(item => (
             <button
               key={item.id}
               onClick={() => setTab(item.id)}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkIpBinding, getRequestIp } from "@/lib/access-control";
 
 function getAdminClient() {
   return createClient(
@@ -17,12 +18,18 @@ export async function GET(req: NextRequest) {
 
   const { data: shop } = await getAdminClient()
     .from("shops")
-    .select("credits, plan")
+    .select("credits, plan, allowed_tabs, last_login_ip")
     .eq("user_id", user.id)
     .single();
+
+  const ipCheck = checkIpBinding(shop, getRequestIp(req));
+  if (!ipCheck.ok) {
+    return NextResponse.json({ error: ipCheck.error }, { status: ipCheck.status });
+  }
 
   return NextResponse.json({
     credits: shop?.credits ?? 0,
     plan: shop?.plan ?? "free",
+    allowedTabs: Array.isArray(shop?.allowed_tabs) ? shop.allowed_tabs : [],
   });
 }

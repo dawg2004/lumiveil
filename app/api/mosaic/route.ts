@@ -1,7 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 export const runtime = "nodejs";
+
+function createBearerSupabaseClient(token: string) {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+}
+
+async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User | null; client: SupabaseClient }> {
+  const token = req.headers.get("authorization")?.replace("Bearer ", "");
+  if (token) {
+    const tokenSupabase = createBearerSupabaseClient(token);
+    const { data: { user } } = await tokenSupabase.auth.getUser(token);
+    if (user) return { user, client: tokenSupabase };
+  }
+  const cookieSupabase = await createServerSupabaseClient();
+  const { data: { user } } = await cookieSupabase.auth.getUser();
+  return { user, client: cookieSupabase };
+}
+
+async function getShopRecord(client: SupabaseClient, userId: string) {
+  const { data, error } = await client
+    .from("shops")
+    .select("id, allowed_tabs, last_login_ip")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
 
 type Scope = "face" | "eyes_only" | "mouth_only" | "bust_up";
 type Style = "blur" | "lens" | "mosaic" | "simple_mosaic";
@@ -641,6 +674,17 @@ async function applyAlphaMask(
 
 export async function POST(req: NextRequest) {
   try {
+    const { user, client } = await getAuthenticatedContext(req);
+    if (!user) {
+      return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
+    }
+
+    const shop = await getShopRecord(client, user.id);
+    const access = evaluateTabAccess(shop, "mosaic", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file");
     const scope = String(formData.get("scope") ?? "face") as Scope;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 export const runtime = "nodejs";
 
@@ -13,6 +14,13 @@ function createBearerSupabaseClient(token: string) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+}
+
+function createAdminSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 }
 
@@ -55,6 +63,17 @@ export async function POST(req: NextRequest) {
     const user = await getUser(req);
     if (!user) {
       return NextResponse.json({ error: "ログインが必要です" }, { status: 401 });
+    }
+
+    const { data: shop } = await createAdminSupabaseClient()
+      .from("shops")
+      .select("allowed_tabs, last_login_ip")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const access = evaluateTabAccess(shop, "analyze", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     const formData = await req.formData();

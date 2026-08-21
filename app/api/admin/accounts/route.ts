@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { ADMIN_PANEL_COOKIE_NAME, isValidAdminPanelSessionToken } from "@/lib/admin-auth";
+import { GATED_TABS, type GatedTab } from "@/lib/access-control";
 
 function getAdminClient() {
   return createClient(
@@ -17,6 +18,9 @@ type ShopRecord = {
   plan: string | null;
   credits: number | null;
   created_at?: string | null;
+  allowed_tabs?: string[] | null;
+  last_login_ip?: string | null;
+  last_login_at?: string | null;
 };
 
 type AdminAuthResult = {
@@ -68,7 +72,7 @@ async function fetchAccounts() {
     getAdminClient().auth.admin.listUsers({ page: 1, perPage: 1000 }),
     getAdminClient()
       .from("shops")
-      .select("id, user_id, name, plan, credits, created_at")
+      .select("id, user_id, name, plan, credits, created_at, allowed_tabs, last_login_ip, last_login_at")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -92,6 +96,9 @@ async function fetchAccounts() {
         shop_name: shop?.name ?? null,
         plan: shop?.plan ?? "free",
         credits: Number(shop?.credits ?? 0),
+        allowed_tabs: Array.isArray(shop?.allowed_tabs) ? shop.allowed_tabs : [],
+        last_login_ip: shop?.last_login_ip ?? null,
+        last_login_at: shop?.last_login_at ?? null,
       };
     });
   }
@@ -107,6 +114,9 @@ async function fetchAccounts() {
     shop_name: shop.name,
     plan: shop.plan ?? "free",
     credits: Number(shop.credits ?? 0),
+    allowed_tabs: Array.isArray(shop.allowed_tabs) ? shop.allowed_tabs : [],
+    last_login_ip: shop.last_login_ip ?? null,
+    last_login_at: shop.last_login_at ?? null,
   }));
 }
 
@@ -178,6 +188,9 @@ export async function PATCH(req: NextRequest) {
     const shopName = typeof body.shopName === "string" ? body.shopName.trim() : "";
     const plan = typeof body.plan === "string" ? body.plan.trim() : "";
     const creditsValue = Number(body.credits);
+    const allowedTabs = Array.isArray(body.allowedTabs)
+      ? body.allowedTabs.filter((t: unknown): t is GatedTab => GATED_TABS.includes(t as GatedTab))
+      : null;
 
     if (!userId) {
       return NextResponse.json({ error: "userId が必要です" }, { status: 400 });
@@ -189,7 +202,7 @@ export async function PATCH(req: NextRequest) {
       shop = await ensureShopForUser(userId, email);
     }
 
-    const updates: Record<string, string | number> = {};
+    const updates: Record<string, string | number | string[]> = {};
     if (shopName) {
       updates.name = shopName;
     }
@@ -198,6 +211,9 @@ export async function PATCH(req: NextRequest) {
     }
     if (!Number.isNaN(creditsValue)) {
       updates.credits = Math.max(0, Math.floor(creditsValue));
+    }
+    if (allowedTabs !== null) {
+      updates.allowed_tabs = allowedTabs;
     }
 
     if (Object.keys(updates).length > 0) {

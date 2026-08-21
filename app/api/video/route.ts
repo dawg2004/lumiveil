@@ -3,6 +3,7 @@ import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { uploadToStorage } from "@/lib/upload-to-storage";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -121,12 +122,37 @@ function encodeHistoryPrompt(input: { kind: "image" | "video"; prompt: string; u
   return `${HISTORY_PREFIX}${JSON.stringify(input)}`;
 }
 
+async function getShopRecord(client: SupabaseClient, userId: string) {
+  const { data, error } = await client
+    .from("shops")
+    .select("id, allowed_tabs, last_login_ip")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!FAL_KEY) {
       return NextResponse.json({ error: "FAL_API_KEY is not configured" }, { status: 500 });
     }
     configureFal();
+
+    const { user, client } = await getAuthenticatedContext(req);
+    if (!user) {
+      return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
+    }
+
+    const shop = await getShopRecord(client, user.id);
+    if (!shop?.id) {
+      return NextResponse.json({ error: "ショップ情報が見つかりません。" }, { status: 400 });
+    }
+
+    const access = evaluateTabAccess(shop, "video", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     const formData = await req.formData();
     const file = formData.get("file");
@@ -196,6 +222,22 @@ export async function GET(req: NextRequest) {
     if (!FAL_KEY) {
       return NextResponse.json({ error: "FAL_API_KEY is not configured" }, { status: 500 });
     }
+
+    const { user, client } = await getAuthenticatedContext(req);
+    if (!user) {
+      return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
+    }
+
+    const shop = await getShopRecord(client, user.id);
+    if (!shop?.id) {
+      return NextResponse.json({ error: "ショップ情報が見つかりません。" }, { status: 400 });
+    }
+
+    const access = evaluateTabAccess(shop, "video", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+
     configureFal();
 
     const statusData = await fal.queue.status(modelId, {
@@ -218,17 +260,14 @@ export async function GET(req: NextRequest) {
         console.error("Video storage upload failed, using fal URL:", err);
       }
 
-      const { user } = await getAuthenticatedContext(req);
-      if (user) {
-        const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
-        await saveVideoHistory({
-          userId: user.id,
-          model,
-          prompt,
-          videoUrl,
-          creditsUsed,
-        });
-      }
+      const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
+      await saveVideoHistory({
+        userId: user.id,
+        model,
+        prompt,
+        videoUrl,
+        creditsUsed,
+      });
       return NextResponse.json({ status: "completed", videoUrl });
     }
 
