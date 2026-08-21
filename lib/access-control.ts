@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-export const GATED_TABS = ["generate", "avatar", "mosaic", "edit", "faceswap", "video", "analyze"] as const;
+export const GATED_TABS = ["generate", "avatar", "mosaic", "step", "edit", "faceswap", "video", "analyze"] as const;
 export type GatedTab = (typeof GATED_TABS)[number];
 
 export function getRequestIp(req: NextRequest): string | null {
