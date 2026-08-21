@@ -191,6 +191,7 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
     const file = formData.get("file");
+    const file2 = formData.get("file2");
     const prompt = String(formData.get("prompt") ?? "").trim();
     const resolution = String(formData.get("resolution") ?? "1k");
 
@@ -207,6 +208,11 @@ export async function POST(req: NextRequest) {
     }
 
     const imageUrl = await uploadToFal(file);
+    const imageUrls = [imageUrl];
+    if (file2 instanceof File) {
+      imageUrls.push(await uploadToFal(file2));
+    }
+
     const response = await fetch(`https://fal.run/${GROK_EDIT_MODEL}`, {
       method: "POST",
       headers: {
@@ -215,7 +221,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         prompt: `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
-        image_urls: [imageUrl],
+        image_urls: imageUrls,
         num_images: 1,
         aspect_ratio: "auto",
         resolution,

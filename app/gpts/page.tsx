@@ -21,6 +21,10 @@ type PreviewImage = {
 type MosaicScope = "face" | "eyes_only" | "bust_up";
 type MosaicStyle = "blur" | "gaussian" | "mosaic";
 type MosaicStrength = 1 | 2 | 3 | 4 | 5;
+type BeautyMode = "natural" | "strong" | "blemish_only";
+type BrightnessMode = "natural" | "bright" | "calm";
+type PoseMode = "elegant" | "hide_face" | "sofa" | "standing";
+type BackgroundPreset = "studio" | "hotel" | "park" | "luxury";
 type ImageSize = {
   width: number;
   height: number;
@@ -51,7 +55,7 @@ const TEXT = {
   backgroundUploadHint: "背景合成を選んだときに有効になります",
   imageSelectHint: "画像ファイルを選択",
   processingHint: "処理のつながりを確認するための GPTs 画面です。",
-  completedMenu1: "調整して続ける",
+  completedMenu1: "調整、別の写真に変更",
   completedMenu2: "新規修正",
   completedMenu3: "このまま続ける",
   go: "Go!",
@@ -73,7 +77,15 @@ const TEXT = {
   processPark: "公園背景へ変更中...",
   processLuxury: "室内ラグジュアリー風へ背景変更中...",
   mosaicError: "モザイク処理に失敗しました。",
+  editError: "処理に失敗しました。",
   chatError: "チャット状態の更新に失敗しました。",
+  recoveryTitle: "生成が止まっている可能性があります。",
+  recoveryBody: "まず一番軽い設定でやり直してください。",
+  recoveryReupload: "1. 写真を1枚だけアップロードし直す",
+  recoveryMosaicOnly: "2. モザイク処理だけ実行",
+  recoveryBrightnessOnly: "3. 明るさ調整だけ実行",
+  recoverySplit: "4. 処理を分けて実行",
+  recoveryRestart: "5. 最初からやり直す",
   detectAgain: "顔を再検出",
   adjustBox: "検出枠を微調整",
   moveBox: "位置",
@@ -116,6 +128,65 @@ const MENU = {
     { label: "やや強い", value: 4 as MosaicStrength },
     { label: "強い", value: 5 as MosaicStrength },
   ],
+  beautyModes: [
+    { label: "ナチュラル", value: "natural" as BeautyMode },
+    { label: "しっかり補正", value: "strong" as BeautyMode },
+    { label: "クマ・ニキビのみ除去", value: "blemish_only" as BeautyMode },
+  ],
+  brightnessModes: [
+    { label: "自然補正", value: "natural" as BrightnessMode },
+    { label: "明るめ", value: "bright" as BrightnessMode },
+    { label: "落ち着いたトーン", value: "calm" as BrightnessMode },
+  ],
+  poseModes: [
+    { label: "エレガント", value: "elegant" as PoseMode },
+    { label: "顔を片手で隠す", value: "hide_face" as PoseMode },
+    { label: "ソファに座る", value: "sofa" as PoseMode },
+    { label: "立ち姿を整える", value: "standing" as PoseMode },
+  ],
+};
+
+const BACKGROUND_PROMPTS: Record<"studio" | "hotel" | "park" | "luxury", string> = {
+  studio:
+    "Change only the background to a professional photo studio backdrop with soft neutral gray or gradient background and clean studio lighting. Keep the subject, pose, outfit, and framing unchanged.",
+  hotel:
+    "Change only the background to an elegant hotel lounge interior with warm ambient lighting and upscale furnishings. Keep the subject, pose, outfit, and framing unchanged.",
+  park:
+    "Change only the background to a natural outdoor park setting with greenery and soft daylight. Keep the subject, pose, outfit, and framing unchanged.",
+  luxury:
+    "Change only the background to a luxurious indoor interior with elegant furniture and soft warm lighting. Keep the subject, pose, outfit, and framing unchanged.",
+};
+
+const COMPOSITE_PROMPT =
+  "The first image contains the main subject. The second image is the desired background. Cut out the subject naturally from the first image, remove any person already present in the second image if there is one, and composite the subject into the second image's background. Match perspective, scale, lighting direction, and color tone so the result looks natural and seamless. Keep the subject's identity, pose, and outfit unchanged.";
+
+const BEAUTY_PROMPTS: Record<BeautyMode, string> = {
+  natural:
+    "Apply light, natural-looking skin retouching: even out skin tone and reduce minor blemishes while keeping visible skin texture. Do not change facial structure or identity.",
+  strong:
+    "Apply noticeably smoother, polished skin retouching while keeping the face looking realistic. Do not change facial structure or identity.",
+  blemish_only:
+    "Only remove dark under-eye circles and acne or blemishes from the skin. Do not smooth or alter skin texture elsewhere, and do not change facial structure or identity.",
+};
+
+const BRIGHTNESS_PROMPTS: Record<BrightnessMode, string> = {
+  natural:
+    "Apply a natural, balanced brightness and color correction to the whole photo without changing the subject or background content.",
+  bright:
+    "Make the overall photo brighter and slightly more vivid while keeping it natural. Do not change the subject or background content.",
+  calm:
+    "Apply a calmer, slightly muted and warmer tone to the overall photo. Do not change the subject or background content.",
+};
+
+const POSE_PROMPTS: Record<PoseMode, string> = {
+  elegant:
+    "Adjust the subject's pose to a graceful, elegant standing or sitting posture appropriate for a portrait, keeping the same location, outfit, and identity.",
+  hide_face:
+    "Adjust the subject's pose so one hand gently covers part of the face in a natural way, keeping the same location, outfit, and identity.",
+  sofa:
+    "Adjust the subject's pose to sitting naturally on a sofa, keeping the same location style, outfit, and identity.",
+  standing:
+    "Adjust the subject's pose to a neat, well-composed standing posture, keeping the same location, outfit, and identity.",
 };
 
 const FALLBACK_FACE_BOX = (imageSize: ImageSize): FaceBox => ({
@@ -143,6 +214,13 @@ export default function GptsPage() {
   const [mosaicScope, setMosaicScope] = useState<MosaicScope>("face");
   const [mosaicStyle, setMosaicStyle] = useState<MosaicStyle>("blur");
   const [mosaicStrength, setMosaicStrength] = useState<MosaicStrength>(3);
+  const [beautyMode, setBeautyMode] = useState<BeautyMode>("natural");
+  const [brightnessMode, setBrightnessMode] = useState<BrightnessMode>("natural");
+  const [poseMode, setPoseMode] = useState<PoseMode>("elegant");
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [lastTool, setLastTool] = useState<ToolType | null>(null);
+  const [beforeStepFile, setBeforeStepFile] = useState<File | null>(null);
+  const [recovery, setRecovery] = useState<string | null>(null);
   const [compareRatio, setCompareRatio] = useState(50);
 
   const postChat = useCallback(
@@ -197,6 +275,7 @@ export default function GptsPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setBackgroundFile(file);
     const backgroundImageUrl = URL.createObjectURL(file);
     await postChat({
       event: "background_photo_uploaded",
@@ -209,28 +288,89 @@ export default function GptsPage() {
     await postChat({ event: "tool_selected", tool });
   }
 
-  async function runMockProcessing(label: string) {
-    setBusyLabel(label);
-    await postChat({ event: "confirm_go" });
-    await new Promise((resolve) => setTimeout(resolve, 900));
+  async function completeStep(resultImageUrl: string) {
+    await postChat({ event: "processing_completed", resultImageUrl });
+  }
 
-    setChat((current) => ({
-      ...current,
-      state: "completed",
-      menu: [TEXT.completedMenu1, TEXT.completedMenu2, TEXT.completedMenu3],
-      session: {
-        ...current.session,
-        step: "completed",
-        resultImageUrl:
-          current.session.backgroundImageUrl ?? current.session.sourceImageUrl,
-      },
-    }));
+  function showRecovery() {
     setBusyLabel(null);
+    setRecovery(`${TEXT.recoveryTitle}\n${TEXT.recoveryBody}`);
+  }
+
+  function handleRunFailure(error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    const isTimeout = error instanceof DOMException && error.name === "AbortError";
+    const isKnownReason = message && message !== TEXT.mosaicError && message !== TEXT.editError;
+
+    if (!isTimeout && isKnownReason) {
+      setBusyLabel(null);
+      window.alert(message);
+      return;
+    }
+
+    showRecovery();
+  }
+
+  function buildEditFormData(file: File, prompt: string, file2?: File) {
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("prompt", prompt);
+    formData.set("resolution", "1k");
+    if (file2) formData.set("file2", file2);
+    return formData;
+  }
+
+  async function runEditRequest(formData: FormData, label: string): Promise<string> {
+    setBusyLabel(label);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 75000);
+
+    try {
+      const response = await fetch("/api/edit", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? TEXT.editError);
+      }
+
+      const data = (await response.json()) as { url?: string };
+      if (!data.url) {
+        throw new Error(TEXT.editError);
+      }
+
+      return data.url;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function refreshSourceFromResult(resultUrl: string) {
+    const response = await fetch(resultUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "step-result.jpg", { type: blob.type || "image/jpeg" });
+
+    setSourceFile(file);
+    setBeforeStepFile(file);
+
+    const bitmap = await createImageBitmap(file);
+    const imageSize = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+
+    setSourceImageSize(imageSize);
+    const detected = await detectFaceOrFallback(file, imageSize);
+    setDetectedFaceBox(detected);
+    setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
   }
 
   async function runMosaic() {
     if (!sourceFile) return;
 
+    setBeforeStepFile(sourceFile);
+    setLastTool("mosaic");
     setBusyLabel(TEXT.detectFace);
     await postChat({ event: "confirm_go" });
 
@@ -269,10 +409,18 @@ export default function GptsPage() {
       formData.set("height", String(activeFaceBox.height));
       formData.set("boxMode", "region");
 
-      const response = await fetch("/api/mosaic", {
-        method: "POST",
-        body: formData,
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 75000);
+      let response: Response;
+      try {
+        response = await fetch("/api/mosaic", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!response.ok) {
         throw new Error(TEXT.mosaicError);
@@ -280,20 +428,178 @@ export default function GptsPage() {
 
       const blob = await response.blob();
       const resultImageUrl = URL.createObjectURL(blob);
-
-      setChat((current) => ({
-        ...current,
-        state: "completed",
-        menu: [TEXT.completedMenu1, TEXT.completedMenu2, TEXT.completedMenu3],
-        session: {
-          ...current.session,
-          step: "completed",
-          resultImageUrl,
-        },
-      }));
+      await completeStep(resultImageUrl);
+    } catch (error) {
+      handleRunFailure(error);
     } finally {
       setBusyLabel(null);
     }
+  }
+
+  async function runBackgroundPreset(preset: BackgroundPreset, label: string) {
+    if (!sourceFile) return;
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("background");
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset]), label);
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function runBackgroundComposite() {
+    if (!sourceFile || !backgroundFile) return;
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("background");
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(
+        buildEditFormData(sourceFile, COMPOSITE_PROMPT, backgroundFile),
+        TEXT.processBackground
+      );
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function runBeauty() {
+    if (!sourceFile) return;
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("beauty");
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(buildEditFormData(sourceFile, BEAUTY_PROMPTS[beautyMode]), TEXT.processBeauty);
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function runBrightness() {
+    if (!sourceFile) return;
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("brightness");
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(
+        buildEditFormData(sourceFile, BRIGHTNESS_PROMPTS[brightnessMode]),
+        TEXT.processBrightness
+      );
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  async function runPose() {
+    if (!sourceFile) return;
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("pose");
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(buildEditFormData(sourceFile, POSE_PROMPTS[poseMode]), TEXT.processPose);
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
+  function rerunLastTool() {
+    if (lastTool === "mosaic") return runMosaic();
+    if (lastTool === "beauty") return runBeauty();
+    if (lastTool === "brightness") return runBrightness();
+    if (lastTool === "pose") return runPose();
+    return Promise.resolve();
+  }
+
+  async function handleCompletedAdjust() {
+    if (beforeStepFile) setSourceFile(beforeStepFile);
+    if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
+  }
+
+  async function handleCompletedRevise() {
+    const resultUrl = chat.session.resultImageUrl;
+    if (!resultUrl) return;
+    await postChat({ event: "continue_with_result" });
+    await refreshSourceFromResult(resultUrl);
+    if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
+    else await rerunLastTool();
+  }
+
+  async function handleCompletedContinue() {
+    const resultUrl = chat.session.resultImageUrl;
+    if (resultUrl) await refreshSourceFromResult(resultUrl);
+    await postChat({ event: "continue_with_result" });
+  }
+
+  function resetAllLocalState() {
+    setBusyLabel(null);
+    setSourceFile(null);
+    setSourceImageSize(null);
+    setDetectedFaceBox(null);
+    setFaceBox(null);
+    setBackgroundFile(null);
+    setLastTool(null);
+    setBeforeStepFile(null);
+  }
+
+  async function handleRecoveryReupload() {
+    setRecovery(null);
+    resetAllLocalState();
+    await postChat({ event: "reset_session" });
+  }
+
+  async function handleRecoveryMosaicOnly() {
+    setRecovery(null);
+    if (beforeStepFile) setSourceFile(beforeStepFile);
+    await postChat({ event: "tool_selected", tool: "mosaic" });
+  }
+
+  async function handleRecoveryBrightnessOnly() {
+    setRecovery(null);
+    if (beforeStepFile) setSourceFile(beforeStepFile);
+    await postChat({ event: "tool_selected", tool: "brightness" });
+  }
+
+  function handleRecoverySplit() {
+    setRecovery(null);
+    if (beforeStepFile) setSourceFile(beforeStepFile);
+    setChat((current) => ({
+      ...current,
+      state: "photo_uploaded_menu",
+      message: undefined,
+      menu: ["1. モザイク処理", "2. 背景変更", "3. 美肌補正", "4. 明るさ調整", "5. ポーズ変更"],
+      session: { ...current.session, step: "photo_uploaded_menu", selectedTool: undefined },
+    }));
+  }
+
+  async function handleRecoveryRestart() {
+    setRecovery(null);
+    resetAllLocalState();
+    await postChat({ event: "reset_session" });
   }
 
   const previews = useMemo<PreviewImage[]>(() => {
@@ -382,11 +688,7 @@ export default function GptsPage() {
             <button
               className="rounded-md border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-stone-500 hover:bg-stone-800"
               onClick={() => {
-                setBusyLabel(null);
-                setSourceFile(null);
-                setSourceImageSize(null);
-                setDetectedFaceBox(null);
-                setFaceBox(null);
+                resetAllLocalState();
                 void postChat({ event: "reset_session" });
               }}
               type="button"
@@ -411,16 +713,16 @@ export default function GptsPage() {
 
               {chat.state === "waiting_background_confirm" ? (
                 <div className="flex flex-wrap gap-3">
-                  <ActionButton label={TEXT.go} onClick={() => void runMockProcessing(TEXT.processBackground)} />
+                  <ActionButton label={TEXT.go} onClick={() => void runBackgroundComposite()} />
                   <ActionButton label={TEXT.revise} onClick={() => void postChat({ event: "tool_selected", tool: "background" })} muted />
                 </div>
               ) : null}
 
               {chat.state === "completed" ? (
                 <div className="flex flex-wrap gap-3">
-                  <ActionButton label={TEXT.completedMenu1} onClick={() => void postChat({ event: "continue_with_result" })} />
-                  <ActionButton label={TEXT.completedMenu2} onClick={() => void postChat({ event: "reset_session" })} muted />
-                  <ActionButton label={TEXT.completedMenu3} onClick={() => void postChat({ event: "continue_with_result" })} muted />
+                  <ActionButton label={TEXT.completedMenu1} onClick={() => void handleCompletedAdjust()} />
+                  <ActionButton label={TEXT.completedMenu2} onClick={() => void handleCompletedRevise()} muted />
+                  <ActionButton label={TEXT.completedMenu3} onClick={() => void handleCompletedContinue()} muted />
                 </div>
               ) : null}
             </div>
@@ -531,10 +833,10 @@ export default function GptsPage() {
 
             {chat.state === "background_menu" ? (
               <div className="grid gap-3">
-                <ActionButton label="フォトスタジオ風" onClick={() => void runMockProcessing(TEXT.processStudio)} />
-                <ActionButton label="ホテルラウンジ風" onClick={() => void runMockProcessing(TEXT.processHotel)} />
-                <ActionButton label="公園" onClick={() => void runMockProcessing(TEXT.processPark)} />
-                <ActionButton label="室内ラグジュアリー風" onClick={() => void runMockProcessing(TEXT.processLuxury)} />
+                <ActionButton label="フォトスタジオ風" onClick={() => void runBackgroundPreset("studio", TEXT.processStudio)} />
+                <ActionButton label="ホテルラウンジ風" onClick={() => void runBackgroundPreset("hotel", TEXT.processHotel)} />
+                <ActionButton label="公園" onClick={() => void runBackgroundPreset("park", TEXT.processPark)} />
+                <ActionButton label="室内ラグジュアリー風" onClick={() => void runBackgroundPreset("luxury", TEXT.processLuxury)} />
                 <ActionButton
                   label="背景を合成する"
                   onClick={() =>
@@ -556,15 +858,11 @@ export default function GptsPage() {
               <div className="space-y-4">
                 <OptionGroup
                   title="美肌補正"
-                  items={[
-                    { label: "ナチュラル", value: "natural" },
-                    { label: "しっかり補正", value: "strong" },
-                    { label: "クマ・ニキビのみ除去", value: "blemish_only" },
-                  ]}
-                  selected={"natural"}
-                  onSelect={() => {}}
+                  items={MENU.beautyModes}
+                  selected={beautyMode}
+                  onSelect={(value) => setBeautyMode(value as BeautyMode)}
                 />
-                <ActionButton label={TEXT.runBeauty} onClick={() => void runMockProcessing(TEXT.processBeauty)} />
+                <ActionButton label={TEXT.runBeauty} onClick={() => void runBeauty()} />
               </div>
             ) : null}
 
@@ -572,15 +870,11 @@ export default function GptsPage() {
               <div className="space-y-4">
                 <OptionGroup
                   title="明るさ"
-                  items={[
-                    { label: "自然補正", value: "natural" },
-                    { label: "明るめ", value: "bright" },
-                    { label: "落ち着いたトーン", value: "calm" },
-                  ]}
-                  selected={"natural"}
-                  onSelect={() => {}}
+                  items={MENU.brightnessModes}
+                  selected={brightnessMode}
+                  onSelect={(value) => setBrightnessMode(value as BrightnessMode)}
                 />
-                <ActionButton label={TEXT.runBrightness} onClick={() => void runMockProcessing(TEXT.processBrightness)} />
+                <ActionButton label={TEXT.runBrightness} onClick={() => void runBrightness()} />
               </div>
             ) : null}
 
@@ -588,16 +882,11 @@ export default function GptsPage() {
               <div className="space-y-4">
                 <OptionGroup
                   title="ポーズ"
-                  items={[
-                    { label: "エレガント", value: "elegant" },
-                    { label: "顔を片手で隠す", value: "hide_face" },
-                    { label: "ソファに座る", value: "sofa" },
-                    { label: "立ち姿を整える", value: "standing" },
-                  ]}
-                  selected={"elegant"}
-                  onSelect={() => {}}
+                  items={MENU.poseModes}
+                  selected={poseMode}
+                  onSelect={(value) => setPoseMode(value as PoseMode)}
                 />
-                <ActionButton label={TEXT.runPose} onClick={() => void runMockProcessing(TEXT.processPose)} />
+                <ActionButton label={TEXT.runPose} onClick={() => void runPose()} />
               </div>
             ) : null}
 
@@ -606,12 +895,27 @@ export default function GptsPage() {
         </section>
       </div>
 
-      {busyLabel ? (
+      {busyLabel && !recovery ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4">
           <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 text-center shadow-2xl shadow-black/30">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-amber-300" />
             <p className="mt-4 text-base font-medium text-stone-100">{busyLabel}</p>
             <p className="mt-2 text-sm text-stone-400">{TEXT.processingHint}</p>
+          </div>
+        </div>
+      ) : null}
+
+      {recovery ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4">
+          <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 shadow-2xl shadow-black/30">
+            <p className="whitespace-pre-line text-sm font-medium text-stone-100">{recovery}</p>
+            <div className="mt-5 grid gap-2">
+              <ActionButton label={TEXT.recoveryReupload} onClick={() => void handleRecoveryReupload()} />
+              <ActionButton label={TEXT.recoveryMosaicOnly} onClick={() => void handleRecoveryMosaicOnly()} muted />
+              <ActionButton label={TEXT.recoveryBrightnessOnly} onClick={() => void handleRecoveryBrightnessOnly()} muted />
+              <ActionButton label={TEXT.recoverySplit} onClick={handleRecoverySplit} muted />
+              <ActionButton label={TEXT.recoveryRestart} onClick={() => void handleRecoveryRestart()} muted />
+            </div>
           </div>
         </div>
       ) : null}

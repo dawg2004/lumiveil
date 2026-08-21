@@ -62,7 +62,12 @@ export function buildResponse(session: EditSession): ChatResponse {
       return {
         state: session.step,
         message:
-          "背景画像を受け取りました。\nこのまま処理を実行しますか？\n1. Go!\n2. 修正する",
+          "これから行う処理内容\n" +
+          "・現在の人物を自然に切り抜きます\n" +
+          "・アップロードされた背景写真に人物が写っている場合は人物を自然に削除します\n" +
+          "・遠近感を合わせて合成します\n" +
+          "・光の向きと色味を調整し、違和感のない仕上がりにします\n\n" +
+          "このまま実行していいですか？\n1. Go!\n2. 修正する",
         session,
       };
 
@@ -107,7 +112,7 @@ export function buildResponse(session: EditSession): ChatResponse {
       return {
         state: session.step,
         menu: [
-          "1. 調整して別の写真に変更",
+          "1. 調整、別の写真に変更",
           "2. 新規修正",
           "3. このまま続ける",
         ],
