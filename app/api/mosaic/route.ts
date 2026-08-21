@@ -3,8 +3,11 @@ import sharp from "sharp";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
+import { uploadBufferToStorage } from "@/lib/upload-to-storage";
 
 export const runtime = "nodejs";
+
+const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 
 function createBearerSupabaseClient(token: string) {
   return createClient(
@@ -48,6 +51,20 @@ async function decrementCredits(client: SupabaseClient, shopId: string, currentC
   const { error } = await client.from("shops").update({ credits: nextCredits }).eq("id", shopId);
   if (error) throw new Error(error.message);
   return nextCredits;
+}
+
+async function saveMosaicHistory(adminClient: SupabaseClient, shopId: string, url: string) {
+  const { error } = await adminClient.from("generation_history").insert({
+    shop_id: shopId,
+    avatar_id: null,
+    prompt: `${HISTORY_PREFIX}${JSON.stringify({ kind: "image", prompt: "モザイク加工", url })}`,
+    image_urls: [url],
+    settings: { media_type: "image" },
+    credits_used: 1,
+  });
+  if (error) {
+    console.error("mosaic history insert failed", error.message);
+  }
 }
 
 type Scope = "face" | "eyes_only" | "mouth_only" | "bust_up";
@@ -792,7 +809,15 @@ export async function POST(req: NextRequest) {
       .png()
       .toBuffer();
 
-    const nextCredits = await decrementCredits(createAdminSupabaseClient(), shop.id, currentCredits);
+    const adminClient = createAdminSupabaseClient();
+    const nextCredits = await decrementCredits(adminClient, shop.id, currentCredits);
+
+    try {
+      const url = await uploadBufferToStorage(output, "image/png", "image");
+      await saveMosaicHistory(adminClient, shop.id, url);
+    } catch (err) {
+      console.error("mosaic history save failed, continuing:", err);
+    }
 
     return new NextResponse(new Uint8Array(output), {
       headers: {
