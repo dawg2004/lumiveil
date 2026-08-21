@@ -7,7 +7,7 @@ import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, use
 import { GATED_TABS } from "@/lib/access-control";
 import { priceToCredits, falVideoCredits } from "@/lib/pricing";
 
-type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage";
+type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage" | "step";
 type MosaicBox = { x: number; y: number; width: number; height: number };
 type ImageSize = { width: number; height: number };
 type MosaicMode = "blur" | "gaussian" | "simple";
@@ -38,10 +38,11 @@ type GenerationHistoryItem = {
   created_at: string;
 };
 
-const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
+const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string; href?: string }> = [
   { id: "generate", label: "画像生成（工事中）", mobileLabel: "生成" },
   { id: "avatar", label: "キャスト登録", mobileLabel: "キャスト" },
   { id: "mosaic", label: "モザイク", mobileLabel: "モザイク" },
+  { id: "step", label: "ステップ生成", mobileLabel: "ステップ", href: "/gpts" },
   { id: "edit", label: "画像編集", mobileLabel: "編集" },
   { id: "faceswap", label: "顔ハメ", mobileLabel: "顔ハメ" },
   { id: "video", label: "動画生成", mobileLabel: "動画" },
@@ -1537,8 +1538,12 @@ export default function Home() {
               <button
                 key={item.id}
                 onClick={() => {
-                  setTab(item.id);
                   setMobileMenuOpen(false);
+                  if (item.href) {
+                    window.location.href = item.href;
+                    return;
+                  }
+                  setTab(item.id);
                 }}
                 style={{
                   width: "100%",
@@ -1568,7 +1573,13 @@ export default function Home() {
           {visibleNavItems.map(item => (
             <button
               key={item.id}
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                if (item.href) {
+                  window.location.href = item.href;
+                  return;
+                }
+                setTab(item.id);
+              }}
               style={{
                 width: "100%",
                 padding: "10px 14px",

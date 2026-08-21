@@ -25,6 +25,7 @@ export type ChatEvent =
   | "tool_selected"
   | "background_photo_uploaded"
   | "confirm_go"
+  | "processing_completed"
   | "reset_session"
   | "continue_with_result";
 
@@ -52,6 +53,7 @@ export type ChatRequest = {
   tool?: ToolType;
   imageUrl?: string;
   backgroundImageUrl?: string;
+  resultImageUrl?: string;
 };
 
 export type ChatResponse = {

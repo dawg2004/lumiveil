@@ -66,6 +66,19 @@ export async function POST(req: Request) {
       saveSession(session);
       return NextResponse.json(buildResponse(session));
 
+    case "processing_completed":
+      if (!body.resultImageUrl) {
+        return NextResponse.json(
+          { error: "resultImageUrl is required" },
+          { status: 400 }
+        );
+      }
+
+      session.resultImageUrl = body.resultImageUrl;
+      session.step = "completed";
+      saveSession(session);
+      return NextResponse.json(buildResponse(session));
+
     case "continue_with_result":
       if (session.resultImageUrl) {
         session.sourceImageUrl = session.resultImageUrl;
