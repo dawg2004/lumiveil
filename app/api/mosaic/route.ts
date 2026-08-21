@@ -14,6 +14,13 @@ function createBearerSupabaseClient(token: string) {
   );
 }
 
+function createAdminSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
 async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User | null; client: SupabaseClient }> {
   const token = req.headers.get("authorization")?.replace("Bearer ", "");
   if (token) {
@@ -29,11 +36,18 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
 async function getShopRecord(client: SupabaseClient, userId: string) {
   const { data, error } = await client
     .from("shops")
-    .select("id, allowed_tabs, last_login_ip")
+    .select("id, credits, allowed_tabs, last_login_ip")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
+}
+
+async function decrementCredits(client: SupabaseClient, shopId: string, currentCredits: number) {
+  const nextCredits = Math.max(0, currentCredits - 1);
+  const { error } = await client.from("shops").update({ credits: nextCredits }).eq("id", shopId);
+  if (error) throw new Error(error.message);
+  return nextCredits;
 }
 
 type Scope = "face" | "eyes_only" | "mouth_only" | "bust_up";
@@ -680,9 +694,18 @@ export async function POST(req: NextRequest) {
     }
 
     const shop = await getShopRecord(client, user.id);
+    if (!shop?.id) {
+      return NextResponse.json({ error: "ショップ情報が見つかりません。" }, { status: 400 });
+    }
+
     const access = evaluateTabAccess(shop, "mosaic", getRequestIp(req));
     if (!access.ok) {
       return NextResponse.json({ error: access.error }, { status: access.status });
+    }
+
+    const currentCredits = Number(shop.credits ?? 0);
+    if (currentCredits <= 0) {
+      return NextResponse.json({ error: "クレジット不足です。チャージ後に再度お試しください。" }, { status: 402 });
     }
 
     const formData = await req.formData();
@@ -769,10 +792,13 @@ export async function POST(req: NextRequest) {
       .png()
       .toBuffer();
 
+    const nextCredits = await decrementCredits(createAdminSupabaseClient(), shop.id, currentCredits);
+
     return new NextResponse(new Uint8Array(output), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "no-store",
+        "X-Credits-Remaining": String(nextCredits),
       },
     });
   } catch (error) {

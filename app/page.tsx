@@ -515,6 +515,9 @@ export default function Home() {
           throw new Error(errData.error ?? "モザイク処理に失敗しました");
         }
 
+        const remainingCredits = apiRes.headers.get("X-Credits-Remaining");
+        if (remainingCredits != null) setCredits(Number(remainingCredits));
+
         const resultBlob = await apiRes.blob();
         setMosaicImage(URL.createObjectURL(resultBlob));
         setMosaicStage("加工が完了しました。");
@@ -2672,6 +2675,7 @@ export default function Home() {
                       自動モザイク
                     </button>
                   </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>推定コスト: 1クレジット</div>
                 </div>
 
                 <button onClick={resetMosaic} style={{ ...smallButtonStyle, width: "100%" }}>
