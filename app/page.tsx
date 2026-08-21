@@ -6,6 +6,12 @@ import { createClient } from "@/lib/supabase";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { GATED_TABS } from "@/lib/access-control";
 import { priceToCredits, falVideoCredits } from "@/lib/pricing";
+import {
+  BACKGROUND_COMPOSITE_PROMPT,
+  BACKGROUND_PRESET_LABELS,
+  BACKGROUND_PROMPTS,
+  type BackgroundPreset,
+} from "@/lib/background-prompts";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage" | "step";
 type MosaicBox = { x: number; y: number; width: number; height: number };
@@ -39,7 +45,7 @@ type GenerationHistoryItem = {
 };
 
 const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string; href?: string }> = [
-  { id: "generate", label: "画像生成（工事中）", mobileLabel: "生成" },
+  { id: "generate", label: "背景生成", mobileLabel: "背景生成" },
   { id: "avatar", label: "キャスト登録", mobileLabel: "キャスト" },
   { id: "mosaic", label: "モザイク", mobileLabel: "モザイク" },
   { id: "step", label: "ステップ生成", mobileLabel: "ステップ", href: "/gpts" },
@@ -219,6 +225,15 @@ export default function Home() {
   const [avatarStatus, setAvatarStatus] = useState("");
   const [avatars, setAvatars] = useState<RegisteredAvatar[]>([]);
   const [avatarListLoading, setAvatarListLoading] = useState(false);
+
+  const [bgFile, setBgFile] = useState<File | null>(null);
+  const [bgSrc, setBgSrc] = useState<string | null>(null);
+  const [bgBackgroundFile, setBgBackgroundFile] = useState<File | null>(null);
+  const [bgBackgroundSrc, setBgBackgroundSrc] = useState<string | null>(null);
+  const [bgCompositeOpen, setBgCompositeOpen] = useState(false);
+  const [bgLoading, setBgLoading] = useState(false);
+  const [bgResult, setBgResult] = useState<string | null>(null);
+  const [bgStatus, setBgStatus] = useState("");
 
   const [editFile, setEditFile] = useState<File | null>(null);
   const [editSrc, setEditSrc] = useState<string | null>(null);
@@ -905,6 +920,89 @@ export default function Home() {
     [handleVideoUpload]
   );
 
+  const handleBgUpload = useCallback((file: File) => {
+    setBgFile(file);
+    setBgSrc(URL.createObjectURL(file));
+    setBgResult(null);
+    setBgStatus("");
+    setBgCompositeOpen(false);
+    setBgBackgroundFile(null);
+    setBgBackgroundSrc(null);
+  }, []);
+
+  const handleBgBackgroundUpload = useCallback((file: File) => {
+    setBgBackgroundFile(file);
+    setBgBackgroundSrc(URL.createObjectURL(file));
+  }, []);
+
+  const runBgRequest = useCallback(
+    async (prompt: string, file2: File | null, label: string) => {
+      if (!bgFile) return;
+
+      setBgLoading(true);
+      setBgStatus(label);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", bgFile);
+        formData.append("prompt", prompt);
+        formData.append("resolution", "1k");
+        if (file2) formData.append("file2", file2);
+
+        const token = await getAuthToken();
+        const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
+        const data = await parseJsonResponse(res);
+        if (!res.ok || data.error) throw new Error(data.error ?? "背景生成に失敗しました");
+
+        setBgResult(data.url);
+        if (data.credits != null) setCredits(data.credits);
+        void loadHistory();
+        setBgStatus("生成が完了しました。");
+      } catch (error) {
+        setBgStatus(error instanceof Error ? error.message : "背景生成に失敗しました");
+      } finally {
+        setBgLoading(false);
+      }
+    },
+    [bgFile, getAuthToken, loadHistory]
+  );
+
+  const runBgPreset = useCallback(
+    (preset: BackgroundPreset) => {
+      void runBgRequest(BACKGROUND_PROMPTS[preset], null, `${BACKGROUND_PRESET_LABELS[preset]}へ背景変更中...`);
+    },
+    [runBgRequest]
+  );
+
+  const runBgComposite = useCallback(() => {
+    if (!bgBackgroundFile) return;
+    void runBgRequest(BACKGROUND_COMPOSITE_PROMPT, bgBackgroundFile, "背景を合成中...");
+  }, [runBgRequest, bgBackgroundFile]);
+
+  const resetBg = useCallback(() => {
+    setBgFile(null);
+    setBgSrc(null);
+    setBgBackgroundFile(null);
+    setBgBackgroundSrc(null);
+    setBgCompositeOpen(false);
+    setBgResult(null);
+    setBgStatus("");
+  }, []);
+
+  const useBgResultForFurtherEdit = useCallback(async () => {
+    if (!bgResult) return;
+    try {
+      const resp = await fetch(bgResult);
+      const blob = await resp.blob();
+      const file = new File([blob], "background-result.jpg", { type: blob.type || "image/jpeg" });
+      handleBgUpload(file);
+      setBgStatus("生成結果を読み込みました。別の背景で再生成できます。");
+    } catch {
+      setBgStatus("画像の読み込みに失敗しました");
+    }
+  }, [bgResult, handleBgUpload]);
+
   const handleEditUpload = useCallback((file: File) => {
     setEditFile(file);
     setEditSrc(URL.createObjectURL(file));
@@ -1396,13 +1494,6 @@ export default function Home() {
     })();
   }, [getAuthToken]);
 
-  const renderPlaceholder = (title: string, body: string) => (
-    <div style={panelStyle}>
-      <div style={{ fontSize: 18, fontWeight: 500, color: "#f0ece4", marginBottom: 12 }}>{title}</div>
-      <div style={{ fontSize: 13, color: "#b8c0c4", lineHeight: 1.8 }}>{body}</div>
-    </div>
-  );
-
   const visibleNavItems = NAV_ITEMS.filter(item => {
     if (!(GATED_TABS as readonly string[]).includes(item.id)) return true;
     return (allowedTabs ?? []).includes(item.id);
@@ -1625,12 +1716,214 @@ export default function Home() {
         </div>
 
         <div className="main-content" style={{ flex: 1, padding: 16, overflowY: "auto" }}>
-          {tab === "generate"
-            ? renderPlaceholder(
-                NAV_ITEMS.find(item => item.id === tab)?.label ?? "LUMIVEIL",
-                "この画面は順次移植中です。まずはモザイク機能を安定させ、MediaPipe Face Landmarker と微調整UIを優先しています。"
-              )
-            : null}
+          {tab === "generate" ? (
+            <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
+              <DropZone onFile={file => handleBgUpload(file)} style={panelStyle}>
+                <div style={sectionLabelStyle}>元画像</div>
+                <label style={uploadButtonStyle}>
+                  画像を選択する
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={event => {
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        handleBgUpload(file);
+                      }
+                    }}
+                  />
+                </label>
+
+                {bgSrc ? (
+                  <div style={{ marginTop: 14, borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)", position: "relative" }}>
+                    <img src={bgSrc} alt="生成前" style={{ width: "100%", maxHeight: 360, objectFit: "contain", display: "block" }} />
+                    {bgLoading ? (
+                      <LoadingExperience label={bgStatus || "背景を生成中"} detail="質感と光の向きを整えています。" overlay />
+                    ) : null}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: 14,
+                      minHeight: 280,
+                      borderRadius: 12,
+                      border: "1px dashed #9b927f",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#5f5648",
+                      background: "rgba(0,0,0,0.03)",
+                      fontSize: 13,
+                    }}
+                  >
+                    画像をドラッグまたはアップロードすると、ここにプレビューが表示されます。
+                  </div>
+                )}
+
+                {bgResult ? (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{ ...sectionLabelStyle, marginBottom: 10 }}>生成後</div>
+                    <div style={{ borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                      <img src={bgResult} alt="生成後" style={{ width: "100%", maxHeight: 460, objectFit: "contain", display: "block" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => void useBgResultForFurtherEdit()}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
+                      >
+                        追加編集
+                      </button>
+                      <button
+                        onClick={() => void saveFileAs(bgResult, bgFile?.name, "background.jpg")}
+                        style={{ ...actionButtonStyle, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", flex: 1, minWidth: 100 }}
+                      >
+                        ダウンロード
+                      </button>
+                      <button
+                        disabled={toAvatarLoading}
+                        onClick={async () => {
+                          if (toAvatarLoading) return;
+                          setToAvatarLoading(true);
+                          try {
+                            const filename = bgResult.split("/").pop() ?? "background.jpg";
+                            const file = await imageUrlToFile(bgResult, filename);
+                            setAvatarFiles([file]);
+                            setAvatarPreviews([URL.createObjectURL(file)]);
+                            setAvatarName("");
+                            setTab("avatar");
+                          } catch { /* ignore */ } finally {
+                            setToAvatarLoading(false);
+                          }
+                        }}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100, background: toAvatarLoading ? "#555" : "#283a30", color: "#f5f0e8", cursor: toAvatarLoading ? "not-allowed" : "pointer" }}
+                      >
+                        {toAvatarLoading ? "読み込み中..." : "👤 キャスト登録"}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const filename = bgResult.split("/").pop() ?? "background.jpg";
+                            const file = await imageUrlToFile(bgResult, filename);
+                            handleVideoUpload(file);
+                            setTab("video");
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                        style={{ ...actionButtonStyle, flex: 1, minWidth: 100 }}
+                      >
+                        動画生成へ
+                      </button>
+                      <button onClick={() => setBgResult(null)} style={{ ...smallButtonStyle, flex: 1, minWidth: 100 }}>
+                        結果をクリア
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </DropZone>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>背景スタイル</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {(Object.keys(BACKGROUND_PRESET_LABELS) as BackgroundPreset[]).map(preset => (
+                      <button
+                        key={preset}
+                        onClick={() => runBgPreset(preset)}
+                        disabled={!bgFile || bgLoading}
+                        style={{
+                          ...actionButtonStyle,
+                          width: "100%",
+                          opacity: !bgFile || bgLoading ? 0.5 : 1,
+                          cursor: !bgFile || bgLoading ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {BACKGROUND_PRESET_LABELS[preset]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
+                    接続先: fal.ai / xai/grok-imagine-image/quality/edit・料金目安: 1クレジット
+                  </div>
+                </div>
+
+                <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>背景の合成</div>
+                  {!bgCompositeOpen ? (
+                    <button
+                      onClick={() => setBgCompositeOpen(true)}
+                      disabled={!bgFile || bgLoading}
+                      style={{
+                        ...smallButtonStyle,
+                        width: "100%",
+                        opacity: !bgFile || bgLoading ? 0.5 : 1,
+                        cursor: !bgFile || bgLoading ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      背景写真をアップロードして合成する
+                    </button>
+                  ) : (
+                    <>
+                      <label style={uploadButtonStyle}>
+                        背景にしたい写真を選択する
+                        <input
+                          type="file"
+                          accept="image/*"
+                          style={{ display: "none" }}
+                          onChange={event => {
+                            const file = event.target.files?.[0];
+                            if (file) handleBgBackgroundUpload(file);
+                          }}
+                        />
+                      </label>
+                      {bgBackgroundSrc ? (
+                        <div style={{ marginTop: 12, borderRadius: 10, overflow: "hidden", background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <img src={bgBackgroundSrc} alt="背景" style={{ width: "100%", maxHeight: 200, objectFit: "contain", display: "block" }} />
+                        </div>
+                      ) : null}
+                      <div style={{ marginTop: 10, fontSize: 11, color: "#6a6258", lineHeight: 1.6 }}>
+                        人物を自然に切り抜き、アップロードした背景に遠近感・光・色味を合わせて合成します。
+                      </div>
+                      <button
+                        onClick={runBgComposite}
+                        disabled={!bgBackgroundFile || bgLoading}
+                        style={{
+                          ...actionButtonStyle,
+                          width: "100%",
+                          marginTop: 10,
+                          opacity: !bgBackgroundFile || bgLoading ? 0.5 : 1,
+                          cursor: !bgBackgroundFile || bgLoading ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        背景を合成する
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div style={panelStyle}>
+                  {bgStatus ? (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        fontSize: 12,
+                        color: bgStatus.includes("失敗") || bgStatus.includes("Error") || bgStatus.includes("できません") ? "#e06060" : "#4a8a6a",
+                        background: "rgba(0,0,0,0.06)",
+                        borderRadius: 8,
+                        padding: "8px 12px",
+                      }}
+                    >
+                      {bgLoading ? <LoadingExperience label={bgStatus} detail="少し時間がかかる場合があります。" compact /> : bgStatus}
+                    </div>
+                  ) : null}
+                  <button onClick={resetBg} style={{ ...smallButtonStyle, width: "100%" }}>
+                    リセット
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {tab === "analyze" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
