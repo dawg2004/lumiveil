@@ -5,6 +5,7 @@ import { TOPUP_PACKS, type TopupPackId } from "@/lib/credit-packs";
 import { createClient } from "@/lib/supabase";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { GATED_TABS } from "@/lib/access-control";
+import { priceToCredits, falVideoCredits } from "@/lib/pricing";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage";
 type MosaicBox = { x: number; y: number; width: number; height: number };
@@ -18,14 +19,6 @@ const ATLAS_VIDEO_VARIANTS: Partial<Record<VideoModel, { variant: string; label:
   atlas_wan26_flash: { variant: "wan26_flash", label: "Wan-2.6 Flash" },
 };
 
-// 実費（ドル）をユーザー表示用クレジット数に自動換算する。
-// $0.09まで:1cr / $0.80まで:2cr / $1.30まで:3cr、以降は $0.5 刻みで+1cr。
-function priceToCredits(usd: number): number {
-  if (usd <= 0.09) return 1;
-  if (usd <= 0.8) return 2;
-  if (usd <= 1.3) return 3;
-  return 3 + Math.ceil((usd - 1.3) / 0.5);
-}
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
 type RegisteredAvatar = {
@@ -1185,6 +1178,7 @@ export default function Home() {
         if (data.status === "completed") {
           clearInterval(videoPollRef.current!);
           setVideoRequestId(null);
+          if (data.credits != null) setCredits(data.credits);
           if (videoStitchMode && videoModel === "grok_v15") {
             setVideoStitchPart1(data.videoUrl);
             setVideoStitchStatus(prev => prev === "part2_done" ? "both_done" : "part1_done");
@@ -1249,6 +1243,7 @@ export default function Home() {
         if (data.status === "completed") {
           clearInterval(videoPollRef2.current!);
           setVideoRequestId2(null);
+          if (data.credits != null) setCredits(data.credits);
           setVideoStitchPart2(data.videoUrl);
           setVideoStitchStatus(prev => prev === "part1_done" ? "both_done" : "part2_done");
         } else {
@@ -3417,13 +3412,7 @@ export default function Home() {
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258", textAlign: "center" }}>
                     {ATLAS_VIDEO_VARIANTS[videoModel]
                       ? "推定コスト: 1クレジット"
-                      : `推定コスト: ${priceToCredits(videoDuration * (
-                          videoModel === "grok"
-                            ? (videoResolution === "480p" ? 0.05 : 0.07)
-                            : videoModel === "grok_v15"
-                              ? (videoResolution === "480p" ? 0.08 : 0.14)
-                              : 0.2419
-                        ))}クレジット`}
+                      : `推定コスト: ${falVideoCredits(videoModel, videoDuration, videoResolution)}クレジット`}
                   </div>
                 </div>
               </div>

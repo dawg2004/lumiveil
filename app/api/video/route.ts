@@ -4,6 +4,7 @@ import { createClient, type SupabaseClient, type User } from "@supabase/supabase
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { uploadToStorage } from "@/lib/upload-to-storage";
 import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
+import { falVideoCredits } from "@/lib/pricing";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -68,6 +69,7 @@ async function getAuthenticatedContext(req: NextRequest): Promise<{ user: User |
   return { user, client: cookieSupabase };
 }
 
+// generation_history に初めて記録された場合のみ true を返す（重複ポーリングでの二重処理を防ぐ）
 async function saveVideoHistory({
   userId,
   model,
@@ -80,7 +82,7 @@ async function saveVideoHistory({
   prompt: string;
   videoUrl: string;
   creditsUsed: number;
-}) {
+}): Promise<boolean> {
   const adminClient = createAdminSupabaseClient();
   const { data: shop } = await adminClient
     .from("shops")
@@ -96,7 +98,7 @@ async function saveVideoHistory({
     .contains("image_urls", [videoUrl])
     .maybeSingle();
 
-  if (existing) return;
+  if (existing) return false;
 
   const historyPrompt = encodeHistoryPrompt({
     kind: "video",
@@ -115,7 +117,16 @@ async function saveVideoHistory({
 
   if (error) {
     console.error("video history insert failed", error.message);
+    return false;
   }
+  return true;
+}
+
+async function decrementCredits(adminClient: SupabaseClient, shopId: string, currentCredits: number, amount: number) {
+  const nextCredits = Math.max(0, currentCredits - amount);
+  const { error } = await adminClient.from("shops").update({ credits: nextCredits }).eq("id", shopId);
+  if (error) throw new Error(error.message);
+  return nextCredits;
 }
 
 function encodeHistoryPrompt(input: { kind: "image" | "video"; prompt: string; url: string }) {
@@ -125,7 +136,7 @@ function encodeHistoryPrompt(input: { kind: "image" | "video"; prompt: string; u
 async function getShopRecord(client: SupabaseClient, userId: string) {
   const { data, error } = await client
     .from("shops")
-    .select("id, allowed_tabs, last_login_ip")
+    .select("id, credits, allowed_tabs, last_login_ip")
     .eq("user_id", userId)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -168,6 +179,11 @@ export async function POST(req: NextRequest) {
     const modelId = MODEL_IDS[model];
     if (!modelId) {
       return NextResponse.json({ error: "invalid model" }, { status: 400 });
+    }
+
+    const creditsNeeded = falVideoCredits(model, duration, resolution);
+    if (Number(shop.credits ?? 0) < creditsNeeded) {
+      return NextResponse.json({ error: "クレジット不足です。チャージ後に再度お試しください。" }, { status: 402 });
     }
 
     const imageUrl = await uploadToFal(file);
@@ -260,15 +276,21 @@ export async function GET(req: NextRequest) {
         console.error("Video storage upload failed, using fal URL:", err);
       }
 
-      const creditsUsed = model === "seedance" ? Math.max(1, Math.round(duration * 2)) : Math.max(1, Math.round(duration * (resolution === "480p" ? 1 : 2)));
-      await saveVideoHistory({
+      const creditsUsed = falVideoCredits(model, duration, resolution);
+      const isNewCompletion = await saveVideoHistory({
         userId: user.id,
         model,
         prompt,
         videoUrl,
         creditsUsed,
       });
-      return NextResponse.json({ status: "completed", videoUrl });
+
+      let credits = Number(shop.credits ?? 0);
+      if (isNewCompletion) {
+        credits = await decrementCredits(createAdminSupabaseClient(), shop.id, credits, creditsUsed);
+      }
+
+      return NextResponse.json({ status: "completed", videoUrl, credits });
     }
 
     return NextResponse.json({
