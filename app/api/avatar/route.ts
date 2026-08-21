@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 function getAdminClient() {
   return createClient(
@@ -25,7 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: shopData } = await getAdminClient()
-      .from("shops").select("id, credits").eq("user_id", user.id).single();
+      .from("shops").select("id, credits, allowed_tabs, last_login_ip").eq("user_id", user.id).single();
+
+    const access = evaluateTabAccess(shopData, "avatar", getRequestIp(req));
+    if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
 
     if (!shopData || shopData.credits < 50) {
       return NextResponse.json({ error: "クレジットが不足しています（アバター作成：50クレジット）" }, { status: 402 });

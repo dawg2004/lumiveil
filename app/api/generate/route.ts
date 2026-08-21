@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateImage } from "@/lib/fal";
 import { createClient } from "@supabase/supabase-js";
 import { uploadToStorage } from "@/lib/upload-to-storage";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 function getAdminClient() {
   return createClient(
@@ -24,9 +25,14 @@ export async function POST(req: NextRequest) {
 
     const { data: shop } = await getAdminClient()
       .from("shops")
-      .select("id")
+      .select("id, allowed_tabs, last_login_ip")
       .eq("user_id", user.id)
       .maybeSingle();
+
+    const access = evaluateTabAccess(shop, "generate", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     const falUrl = await generateImage(imageUrl, prompt, background);
 

@@ -3,6 +3,7 @@ import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { uploadToStorage } from "@/lib/upload-to-storage";
+import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 export const runtime = "nodejs";
 
@@ -95,7 +96,7 @@ function encodeHistoryPrompt(input: { kind: "image" | "video"; prompt: string; u
 async function getShopRecord(client: SupabaseClient, userId: string) {
   const { data, error } = await client
     .from("shops")
-    .select("id, credits")
+    .select("id, credits, allowed_tabs, last_login_ip")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -177,6 +178,11 @@ export async function POST(req: NextRequest) {
 
     if (!shop?.id) {
       return NextResponse.json({ error: "ショップ情報が見つかりません。" }, { status: 400 });
+    }
+
+    const access = evaluateTabAccess(shop, "edit", getRequestIp(req));
+    if (!access.ok) {
+      return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     if (currentCredits <= 0) {
