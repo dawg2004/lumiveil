@@ -45,7 +45,6 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string }> = [
   { id: "video", label: "動画生成", mobileLabel: "動画" },
   { id: "analyze", label: "AI変換", mobileLabel: "変換" },
   { id: "history", label: "履歴", mobileLabel: "履歴" },
-  { id: "plan", label: "プラン", mobileLabel: "プラン" },
   { id: "mypage", label: "マイページ", mobileLabel: "設定" },
 ];
 
