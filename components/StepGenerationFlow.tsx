@@ -108,11 +108,11 @@ const TEXT = {
 
 const MENU = {
   tools: [
-    { label: "1. モザイク処理", tool: "mosaic" as ToolType },
-    { label: "2. 背景変更", tool: "background" as ToolType },
-    { label: "3. 美肌補正", tool: "beauty" as ToolType },
-    { label: "4. 明るさ調整", tool: "brightness" as ToolType },
-    { label: "5. ポーズ変更", tool: "pose" as ToolType },
+    { label: "モザイク処理", tool: "mosaic" as ToolType, icon: "🎭" },
+    { label: "背景変更", tool: "background" as ToolType, icon: "🖼️" },
+    { label: "美肌補正", tool: "beauty" as ToolType, icon: "✨" },
+    { label: "明るさ調整", tool: "brightness" as ToolType, icon: "☀️" },
+    { label: "ポーズ変更", tool: "pose" as ToolType, icon: "🧍" },
   ],
   mosaicScopes: [
     { label: "顔全体", value: "face" as MosaicScope },
@@ -666,7 +666,13 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
   }
 
   return (
-    <div className={embedded ? "rounded-lg bg-stone-950 p-4 text-stone-100 sm:p-6" : "min-h-screen bg-stone-950 px-4 py-8 text-stone-100 sm:px-6"}>
+    <div
+      className={
+        embedded
+          ? "rounded-lg bg-stone-950 bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.08),transparent_60%)] p-4 text-stone-100 sm:p-6"
+          : "min-h-screen bg-stone-950 bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.1),transparent_60%)] px-4 py-8 text-stone-100 sm:px-6"
+      }
+    >
       {!embedded ? (
         <div className="mx-auto mb-6 flex max-w-6xl items-center justify-between gap-4">
           <div>
@@ -683,7 +689,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       ) : null}
 
       <div className={`mx-auto grid max-w-6xl gap-6 ${embedded ? "" : "lg:grid-cols-[1.05fr_0.95fr]"}`}>
-        <section className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
+        <section className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-[0_0_0_1px_rgba(201,168,76,0.06),0_20px_45px_-20px_rgba(0,0,0,0.7)] sm:p-6">
           <div className="mb-5 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="h-4 w-1 rounded-full bg-[#c9a84c]" />
@@ -781,9 +787,15 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
           <Panel title={TEXT.panelActions}>
             {chat.state === "photo_uploaded_menu" ? (
-              <div className="grid gap-3">
-                {MENU.tools.map((item) => (
-                  <ActionButton key={item.tool} label={item.label} onClick={() => void selectTool(item.tool)} />
+              <div className="grid gap-2.5">
+                {MENU.tools.map((item, index) => (
+                  <StepButton
+                    key={item.tool}
+                    index={index + 1}
+                    icon={item.icon}
+                    label={item.label}
+                    onClick={() => void selectTool(item.tool)}
+                  />
                 ))}
               </div>
             ) : null}
@@ -890,8 +902,8 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       </div>
 
       {busyLabel && !recovery ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4">
-          <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 text-center shadow-2xl shadow-black/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-[#c9a84c]/20 bg-stone-900 p-6 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-[#c9a84c]" />
             <p className="mt-4 text-base font-medium text-stone-100">{busyLabel}</p>
           </div>
@@ -899,8 +911,8 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       ) : null}
 
       {recovery ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4">
-          <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 shadow-2xl shadow-black/30">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-[#c9a84c]/20 bg-stone-900 p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]">
             <p className="whitespace-pre-line text-sm font-medium text-stone-100">{recovery}</p>
             <div className="mt-5 grid gap-2">
               <ActionButton label={TEXT.recoveryReupload} onClick={() => void handleRecoveryReupload()} />
@@ -918,7 +930,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-xl shadow-black/20">
+    <div className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-[0_0_0_1px_rgba(201,168,76,0.06),0_16px_36px_-18px_rgba(0,0,0,0.7)]">
       <div className="flex items-center gap-2">
         <span className="h-3.5 w-1 rounded-full bg-[#c9a84c]" />
         <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-300">{title}</h2>
@@ -1098,16 +1110,17 @@ function OptionGroup({
           const active = item.value === selected;
           return (
             <button
-              className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
+              className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-3 text-left text-sm transition ${
                 active
-                  ? "border-[#c9a84c] bg-[#ddc37e] text-stone-950"
+                  ? "border-[#c9a84c] bg-[#ddc37e] text-stone-950 shadow-[0_6px_18px_-8px_rgba(201,168,76,0.6)]"
                   : "border-stone-700 bg-stone-950 text-stone-100 hover:border-[#c9a84c]/60 hover:bg-stone-900"
               }`}
               key={`${title}-${item.value}`}
               onClick={() => onSelect(item.value)}
               type="button"
             >
-              {item.label}
+              <span>{item.label}</span>
+              {active ? <span className="text-xs">✓</span> : null}
             </button>
           );
         })}
@@ -1118,16 +1131,45 @@ function OptionGroup({
 
 function ActionButton({ label, onClick, muted }: { label: string; onClick: () => void; muted?: boolean }) {
   const className = muted
-    ? "border-stone-700 bg-stone-900 text-stone-100 hover:border-stone-500 hover:bg-stone-800"
-    : "border-[#c9a84c]/60 bg-[#ddc37e] text-stone-950 hover:bg-[#efe3bd]";
+    ? "border-stone-700 bg-stone-900 text-stone-100 shadow-sm hover:border-stone-500 hover:bg-stone-800"
+    : "border-[#c9a84c]/60 bg-[#ddc37e] text-stone-950 shadow-[0_8px_24px_-10px_rgba(201,168,76,0.6)] hover:bg-[#efe3bd]";
 
   return (
     <button
-      className={`rounded-lg border px-4 py-3 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${className}`}
+      className={`rounded-lg border px-4 py-3 text-sm font-medium transition hover:-translate-y-0.5 active:translate-y-0 ${className}`}
       onClick={onClick}
       type="button"
     >
       {label}
+    </button>
+  );
+}
+
+function StepButton({
+  index,
+  icon,
+  label,
+  onClick,
+}: {
+  index: number;
+  icon: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="group flex items-center gap-3 rounded-lg border border-stone-700 bg-stone-950 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-[#c9a84c]/60 hover:bg-stone-900 hover:shadow-[0_10px_28px_-12px_rgba(201,168,76,0.45)]"
+      onClick={onClick}
+      type="button"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/15 text-sm font-semibold text-[#c9a84c] transition group-hover:bg-[#c9a84c] group-hover:text-stone-950">
+        {index}
+      </span>
+      <span className="flex-1 text-sm font-medium text-stone-100">
+        <span className="mr-1.5">{icon}</span>
+        {label}
+      </span>
+      <span className="text-stone-600 transition group-hover:translate-x-0.5 group-hover:text-[#c9a84c]">→</span>
     </button>
   );
 }
