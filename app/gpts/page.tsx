@@ -684,8 +684,7 @@ export default function GptsPage() {
         <section className="rounded-lg border border-stone-800 bg-stone-900/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
           <div className="mb-5 flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-amber-300/80">{TEXT.appName}</p>
-              <h2 className="mt-2 text-2xl font-semibold text-stone-50">チャット編集</h2>
+              <h2 className="text-2xl font-semibold text-stone-50">チャット編集</h2>
             </div>
             <button
               className="rounded-md border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-stone-500 hover:bg-stone-800"
