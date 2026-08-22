@@ -58,7 +58,6 @@ const TEXT = {
   sessionLoading: "セッションを準備しています...",
   backgroundUploadHint: "背景合成を選んだときに有効になります",
   imageSelectHint: "画像ファイルを選択",
-  processingHint: "処理のつながりを確認するための GPTs 画面です。",
   completedMenu1: "調整、別の写真に変更",
   completedMenu2: "新規修正",
   completedMenu3: "このまま続ける",
@@ -704,16 +703,6 @@ export default function GptsPage() {
             <div className="space-y-4">
               <Bubble text={chat.message} />
 
-              {chat.menu?.length ? (
-                <div className="rounded-lg border border-stone-800 bg-stone-900 p-4">
-                  <ul className="space-y-2 text-sm text-stone-200">
-                    {chat.menu.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-
               {chat.state === "waiting_background_confirm" ? (
                 <div className="flex flex-wrap gap-3">
                   <ActionButton label={TEXT.go} onClick={() => void runBackgroundComposite()} />
@@ -903,7 +892,6 @@ export default function GptsPage() {
           <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 text-center shadow-2xl shadow-black/30">
             <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-amber-300" />
             <p className="mt-4 text-base font-medium text-stone-100">{busyLabel}</p>
-            <p className="mt-2 text-sm text-stone-400">{TEXT.processingHint}</p>
           </div>
         </div>
       ) : null}
