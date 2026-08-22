@@ -670,11 +670,11 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       {!embedded ? (
         <div className="mx-auto mb-6 flex max-w-6xl items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-amber-300/80">{TEXT.appName}</p>
+            <p className="text-xs uppercase tracking-[0.24em] text-[#c9a84c]/80">{TEXT.appName}</p>
             <h1 className="mt-2 text-3xl font-semibold text-stone-50">{TEXT.title}</h1>
           </div>
           <a
-            className="rounded-md border border-stone-700 px-4 py-2 text-sm text-stone-100 transition hover:border-stone-500 hover:bg-stone-900"
+            className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-100 transition hover:border-stone-500 hover:bg-stone-900"
             href="/"
           >
             {TEXT.home}
@@ -683,13 +683,14 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       ) : null}
 
       <div className={`mx-auto grid max-w-6xl gap-6 ${embedded ? "" : "lg:grid-cols-[1.05fr_0.95fr]"}`}>
-        <section className="rounded-lg border border-stone-800 bg-stone-900/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
+        <section className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
           <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-stone-50">チャット編集</h2>
+            <div className="flex items-center gap-2">
+              <span className="h-4 w-1 rounded-full bg-[#c9a84c]" />
+              <h2 className="text-lg font-semibold text-stone-50">チャット編集</h2>
             </div>
             <button
-              className="rounded-md border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-stone-500 hover:bg-stone-800"
+              className="rounded-lg border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-[#c9a84c]/60 hover:bg-stone-800"
               onClick={() => {
                 resetAllLocalState();
                 void postChat({ event: "reset_session" });
@@ -891,7 +892,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       {busyLabel && !recovery ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4">
           <div className="w-full max-w-sm rounded-lg border border-stone-800 bg-stone-900 p-6 text-center shadow-2xl shadow-black/30">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-amber-300" />
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-[#c9a84c]" />
             <p className="mt-4 text-base font-medium text-stone-100">{busyLabel}</p>
           </div>
         </div>
@@ -917,8 +918,11 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-stone-800 bg-stone-900/90 p-5 shadow-xl shadow-black/20">
-      <h2 className="text-lg font-semibold text-stone-50">{title}</h2>
+    <div className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-xl shadow-black/20">
+      <div className="flex items-center gap-2">
+        <span className="h-3.5 w-1 rounded-full bg-[#c9a84c]" />
+        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-300">{title}</h2>
+      </div>
       <div className="mt-4">{children}</div>
     </div>
   );
@@ -929,7 +933,7 @@ function Bubble({ text }: { text?: string }) {
 
   return (
     <div className="flex">
-      <div className="max-w-[90%] rounded-lg bg-amber-200 px-4 py-3 text-sm text-stone-950">{text}</div>
+      <div className="max-w-[90%] rounded-lg bg-[#ddc37e] px-4 py-3 text-sm text-stone-950">{text}</div>
     </div>
   );
 }
@@ -1010,7 +1014,7 @@ function SourcePreview({
         {faceBox && imageSize ? (
           <div
             aria-hidden="true"
-            className="absolute border-2 border-amber-300 bg-amber-300/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.18)]"
+            className="absolute border-2 border-[#c9a84c] bg-[#c9a84c]/10 shadow-[0_0_0_9999px_rgba(0,0,0,0.18)]"
             onPointerDown={(event) => {
               event.preventDefault();
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -1030,10 +1034,10 @@ function SourcePreview({
               touchAction: "none",
             }}
           >
-            <div className="absolute left-2 top-2 rounded bg-stone-950/80 px-2 py-1 text-[11px] text-amber-200">Drag</div>
+            <div className="absolute left-2 top-2 rounded bg-stone-950/80 px-2 py-1 text-[11px] text-[#ddc37e]">Drag</div>
             <button
               aria-label="Resize face box"
-              className="absolute bottom-1 right-1 h-4 w-4 rounded-sm border border-stone-950 bg-amber-300"
+              className="absolute bottom-1 right-1 h-4 w-4 rounded-sm border border-stone-950 bg-[#c9a84c]"
               onPointerDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1067,7 +1071,7 @@ function UploadCard({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-700 bg-stone-950 px-4 py-8 text-center transition hover:border-stone-500 hover:bg-stone-900">
+    <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-stone-700 bg-stone-950 px-4 py-8 text-center transition hover:border-[#c9a84c]/60 hover:bg-stone-900">
       <span className="text-sm font-medium text-stone-100">{label}</span>
       <span className="mt-2 text-xs text-stone-400">{disabled ? TEXT.backgroundUploadHint : TEXT.imageSelectHint}</span>
       <input accept={accept} className="hidden" disabled={disabled} onChange={onChange} type="file" />
@@ -1094,10 +1098,10 @@ function OptionGroup({
           const active = item.value === selected;
           return (
             <button
-              className={`rounded-md border px-3 py-3 text-left text-sm transition ${
+              className={`rounded-lg border px-3 py-3 text-left text-sm transition ${
                 active
-                  ? "border-amber-300 bg-amber-200 text-stone-950"
-                  : "border-stone-700 bg-stone-950 text-stone-100 hover:border-amber-300/60 hover:bg-stone-900"
+                  ? "border-[#c9a84c] bg-[#ddc37e] text-stone-950"
+                  : "border-stone-700 bg-stone-950 text-stone-100 hover:border-[#c9a84c]/60 hover:bg-stone-900"
               }`}
               key={`${title}-${item.value}`}
               onClick={() => onSelect(item.value)}
@@ -1115,10 +1119,14 @@ function OptionGroup({
 function ActionButton({ label, onClick, muted }: { label: string; onClick: () => void; muted?: boolean }) {
   const className = muted
     ? "border-stone-700 bg-stone-900 text-stone-100 hover:border-stone-500 hover:bg-stone-800"
-    : "border-amber-300/60 bg-amber-200 text-stone-950 hover:bg-amber-100";
+    : "border-[#c9a84c]/60 bg-[#ddc37e] text-stone-950 hover:bg-[#efe3bd]";
 
   return (
-    <button className={`rounded-md border px-4 py-3 text-sm font-medium transition ${className}`} onClick={onClick} type="button">
+    <button
+      className={`rounded-lg border px-4 py-3 text-sm font-medium shadow-sm transition hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 ${className}`}
+      onClick={onClick}
+      type="button"
+    >
       {label}
     </button>
   );
@@ -1127,7 +1135,7 @@ function ActionButton({ label, onClick, muted }: { label: string; onClick: () =>
 function MiniButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
-      className="rounded-md border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100 transition hover:border-amber-300/60 hover:bg-stone-800"
+      className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-100 transition hover:border-[#c9a84c]/60 hover:bg-stone-800"
       onClick={onClick}
       type="button"
     >
@@ -1157,19 +1165,19 @@ function CompareSlider({
 }) {
   return (
     <div className="bg-stone-950 p-3">
-      <div className="relative overflow-hidden rounded-md bg-stone-900">
+      <div className="relative overflow-hidden rounded-lg bg-stone-900">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img alt={beforeLabel} className="h-72 w-full object-contain" src={beforeSrc} />
         <div className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${ratio}%` }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img alt={afterLabel} className="h-72 w-full max-w-none object-contain" src={afterSrc} style={{ width: "100%" }} />
         </div>
-        <div aria-hidden="true" className="absolute inset-y-0 z-10 w-0.5 bg-amber-300 shadow-[0_0_0_1px_rgba(12,10,9,0.45)]" style={{ left: `calc(${ratio}% - 1px)` }} />
+        <div aria-hidden="true" className="absolute inset-y-0 z-10 w-0.5 bg-[#c9a84c] shadow-[0_0_0_1px_rgba(12,10,9,0.45)]" style={{ left: `calc(${ratio}% - 1px)` }} />
         <div className="pointer-events-none absolute left-3 top-3 rounded bg-stone-950/80 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-stone-300">{beforeLabel}</div>
-        <div className="pointer-events-none absolute right-3 top-3 rounded bg-amber-300/90 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-stone-950">{afterLabel}</div>
+        <div className="pointer-events-none absolute right-3 top-3 rounded bg-[#c9a84c]/90 px-2 py-1 text-[11px] uppercase tracking-[0.18em] text-stone-950">{afterLabel}</div>
       </div>
       <div className="mt-3 flex items-center gap-3">
-        <input aria-label={TEXT.sliderHint} className="w-full accent-amber-300" max={100} min={0} onChange={(event) => onRatioChange(Number(event.target.value))} type="range" value={ratio} />
+        <input aria-label={TEXT.sliderHint} className="w-full accent-[#c9a84c]" max={100} min={0} onChange={(event) => onRatioChange(Number(event.target.value))} type="range" value={ratio} />
         <span className="w-12 text-right text-xs text-stone-400">{ratio}%</span>
       </div>
       <p className="mt-2 text-xs text-stone-500">{TEXT.sliderHint}</p>
