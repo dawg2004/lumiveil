@@ -682,7 +682,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className={`mx-auto grid max-w-6xl gap-6 ${embedded ? "" : "lg:grid-cols-[1.05fr_0.95fr]"}`}>
         <section className="rounded-lg border border-stone-800 bg-stone-900/90 p-5 shadow-2xl shadow-black/20 sm:p-6">
           <div className="mb-5 flex items-center justify-between">
             <div>
