@@ -11,6 +11,11 @@ import {
 } from "react";
 
 import { detectFirstFace, type FaceBox } from "@/lib/faceDetector";
+import {
+  BACKGROUND_COMPOSITE_PROMPT,
+  BACKGROUND_PROMPTS,
+  type BackgroundPreset,
+} from "@/lib/background-prompts";
 import type { ChatResponse, ToolType } from "@/types/chat";
 
 type PreviewImage = {
@@ -24,7 +29,6 @@ type MosaicStrength = 1 | 2 | 3 | 4 | 5;
 type BeautyMode = "natural" | "strong" | "blemish_only";
 type BrightnessMode = "natural" | "bright" | "calm";
 type PoseMode = "elegant" | "hide_face" | "sofa" | "standing";
-type BackgroundPreset = "studio" | "hotel" | "park" | "luxury";
 type ImageSize = {
   width: number;
   height: number;
@@ -145,20 +149,6 @@ const MENU = {
     { label: "立ち姿を整える", value: "standing" as PoseMode },
   ],
 };
-
-const BACKGROUND_PROMPTS: Record<"studio" | "hotel" | "park" | "luxury", string> = {
-  studio:
-    "Change only the background to a professional photo studio backdrop with soft neutral gray or gradient background and clean studio lighting. Keep the subject, pose, outfit, and framing unchanged.",
-  hotel:
-    "Change only the background to an elegant hotel lounge interior with warm ambient lighting and upscale furnishings. Keep the subject, pose, outfit, and framing unchanged.",
-  park:
-    "Change only the background to a natural outdoor park setting with greenery and soft daylight. Keep the subject, pose, outfit, and framing unchanged.",
-  luxury:
-    "Change only the background to a luxurious indoor interior with elegant furniture and soft warm lighting. Keep the subject, pose, outfit, and framing unchanged.",
-};
-
-const COMPOSITE_PROMPT =
-  "The first image contains the main subject. The second image is the desired background. Cut out the subject naturally from the first image, remove any person already present in the second image if there is one, and composite the subject into the second image's background. Match perspective, scale, lighting direction, and color tone so the result looks natural and seamless. Keep the subject's identity, pose, and outfit unchanged.";
 
 const BEAUTY_PROMPTS: Record<BeautyMode, string> = {
   natural:
@@ -475,7 +465,7 @@ export default function GptsPage() {
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, COMPOSITE_PROMPT, backgroundFile),
+        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile),
         TEXT.processBackground
       );
       await completeStep(url);

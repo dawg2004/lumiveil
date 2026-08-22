@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { GATED_TABS, type GatedTab } from "@/lib/access-control";
 
 const TAB_LABELS: Record<GatedTab, string> = {
-  generate: "画像生成",
+  generate: "背景生成",
   avatar: "キャスト登録",
   mosaic: "モザイク",
   step: "ステップ生成",
