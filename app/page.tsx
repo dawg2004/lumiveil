@@ -12,6 +12,7 @@ import {
   BACKGROUND_PROMPTS,
   type BackgroundPreset,
 } from "@/lib/background-prompts";
+import StepGenerationFlow from "@/components/StepGenerationFlow";
 
 type TabId = "generate" | "avatar" | "mosaic" | "edit" | "faceswap" | "video" | "analyze" | "history" | "plan" | "mypage" | "step";
 type MosaicBox = { x: number; y: number; width: number; height: number };
@@ -48,7 +49,7 @@ const NAV_ITEMS: Array<{ id: TabId; label: string; mobileLabel: string; href?: s
   { id: "generate", label: "背景生成", mobileLabel: "背景生成" },
   { id: "avatar", label: "キャスト登録", mobileLabel: "キャスト" },
   { id: "mosaic", label: "モザイク", mobileLabel: "モザイク" },
-  { id: "step", label: "ステップ生成", mobileLabel: "ステップ", href: "/gpts" },
+  { id: "step", label: "ステップ生成", mobileLabel: "ステップ" },
   { id: "edit", label: "画像編集", mobileLabel: "編集" },
   { id: "faceswap", label: "顔ハメ", mobileLabel: "顔ハメ" },
   { id: "video", label: "動画生成", mobileLabel: "動画" },
@@ -3012,6 +3013,8 @@ export default function Home() {
               </div>
             </div>
           ) : null}
+
+          {tab === "step" ? <StepGenerationFlow embedded /> : null}
 
           {tab === "edit" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>
