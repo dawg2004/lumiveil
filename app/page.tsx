@@ -302,6 +302,8 @@ export default function Home() {
   const [historyToVideoId, setHistoryToVideoId] = useState<string | null>(null);
   const [historyToEditId, setHistoryToEditId] = useState<string | null>(null);
   const [historyToAvatarId, setHistoryToAvatarId] = useState<string | null>(null);
+  const [historyToStepId, setHistoryToStepId] = useState<string | null>(null);
+  const [stepInitialFile, setStepInitialFile] = useState<File | null>(null);
   const [toAvatarLoading, setToAvatarLoading] = useState(false);
   const [historyStatus, setHistoryStatus] = useState("");
   const [historyPage, setHistoryPage] = useState(1);
@@ -2315,7 +2317,7 @@ export default function Home() {
                           </button>
                         </div>
                         {!isVideo && hasMedia && (
-                          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                             <button
                               disabled={historyToEditId === item.id}
                               onClick={async () => {
@@ -2334,7 +2336,7 @@ export default function Home() {
                               }}
                               style={{
                                 ...smallButtonStyle,
-                                flex: 1,
+                                flex: "1 1 45%",
                                 background: historyToEditId === item.id ? "#555" : "#4a3a28",
                                 color: "#f5f0e8",
                                 cursor: historyToEditId === item.id ? "not-allowed" : "pointer",
@@ -2360,7 +2362,7 @@ export default function Home() {
                               }}
                               style={{
                                 ...smallButtonStyle,
-                                flex: 1,
+                                flex: "1 1 45%",
                                 background: historyToVideoId === item.id ? "#555" : "#3a3028",
                                 color: "#f5f0e8",
                                 cursor: historyToVideoId === item.id ? "not-allowed" : "pointer",
@@ -2389,13 +2391,41 @@ export default function Home() {
                                 }}
                                 style={{
                                   ...smallButtonStyle,
-                                  flex: 1,
+                                  flex: "1 1 45%",
                                   background: historyToAvatarId === item.id ? "#555" : "#283a30",
                                   color: "#f5f0e8",
                                   cursor: historyToAvatarId === item.id ? "not-allowed" : "pointer",
                                 }}
                               >
                                 {historyToAvatarId === item.id ? "読み込み中..." : "👤 キャスト登録"}
+                              </button>
+                            )}
+                            {!isVideo && (
+                              <button
+                                disabled={historyToStepId === item.id}
+                                onClick={async () => {
+                                  if (historyToStepId) return;
+                                  setHistoryToStepId(item.id);
+                                  try {
+                                    const filename = item.generated_image_url.split("/").pop() ?? "image.jpg";
+                                    const file = await imageUrlToFile(item.generated_image_url, filename);
+                                    setStepInitialFile(file);
+                                    setTab("step");
+                                  } catch {
+                                    // ignore
+                                  } finally {
+                                    setHistoryToStepId(null);
+                                  }
+                                }}
+                                style={{
+                                  ...smallButtonStyle,
+                                  flex: "1 1 45%",
+                                  background: historyToStepId === item.id ? "#555" : "#6f5310",
+                                  color: "#f5f0e8",
+                                  cursor: historyToStepId === item.id ? "not-allowed" : "pointer",
+                                }}
+                              >
+                                {historyToStepId === item.id ? "読み込み中..." : "🪄 ステップ生成"}
                               </button>
                             )}
                           </div>
@@ -3014,7 +3044,9 @@ export default function Home() {
             </div>
           ) : null}
 
-          {tab === "step" ? <StepGenerationFlow embedded /> : null}
+          {tab === "step" ? (
+            <StepGenerationFlow embedded initialFile={stepInitialFile} onInitialFileConsumed={() => setStepInitialFile(null)} />
+          ) : null}
 
           {tab === "edit" ? (
             <div className="layout-grid" style={{ display: "grid", gridTemplateColumns: "1.15fr 0.85fr", gap: 20 }}>

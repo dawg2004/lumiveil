@@ -197,7 +197,15 @@ const STATE_PROMPTS: Partial<Record<AppStep, string>> = {
   completed: "仕上がりはいかがですか？",
 };
 
-export default function StepGenerationFlow({ embedded = false }: { embedded?: boolean } = {}) {
+export default function StepGenerationFlow({
+  embedded = false,
+  initialFile = null,
+  onInitialFileConsumed,
+}: {
+  embedded?: boolean;
+  initialFile?: File | null;
+  onInitialFileConsumed?: () => void;
+} = {}) {
   const [chat, setChat] = useState<ChatResponse>({
     state: "waiting_user_photo",
     message: TEXT.uploadPrompt,
@@ -278,10 +286,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     return detected ?? FALLBACK_FACE_BOX(imageSize);
   }
 
-  async function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  async function loadSourceFile(file: File, userText = "写真をアップロードしました") {
     setSourceFile(file);
     const bitmap = await createImageBitmap(file);
     const imageSize = { width: bitmap.width, height: bitmap.height };
@@ -293,12 +298,25 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
 
     const imageUrl = URL.createObjectURL(file);
-    pushTurn("写真をアップロードしました", { userImage: imageUrl });
+    pushTurn(userText, { userImage: imageUrl });
     try {
       await postChat({ event: "user_photo_uploaded", imageUrl });
     } catch (error) {
       window.alert(error instanceof Error ? error.message : TEXT.chatError);
     }
+  }
+
+  useEffect(() => {
+    if (!initialFile) return;
+    void loadSourceFile(initialFile, "履歴から写真を読み込みました");
+    onInitialFileConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFile]);
+
+  async function handleSourceImageChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    await loadSourceFile(file);
     event.target.value = "";
   }
 
