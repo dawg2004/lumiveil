@@ -6,21 +6,25 @@ import {
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
   useCallback,
-  useMemo,
+  useEffect,
+  useRef,
   useState,
 } from "react";
 
 import { detectFirstFace, type FaceBox } from "@/lib/faceDetector";
 import {
   BACKGROUND_COMPOSITE_PROMPT,
+  BACKGROUND_PRESET_LABELS,
   BACKGROUND_PROMPTS,
   type BackgroundPreset,
 } from "@/lib/background-prompts";
-import type { ChatResponse, ToolType } from "@/types/chat";
+import type { AppStep, ChatResponse, ToolType } from "@/types/chat";
 
-type PreviewImage = {
-  label: string;
-  url?: string;
+type HistoryEntry = {
+  id: string;
+  role: "bot" | "user";
+  text: string;
+  image?: string;
 };
 
 type MosaicScope = "face" | "eyes_only" | "bust_up";
@@ -52,10 +56,7 @@ const TEXT = {
   userPhoto: "人物写真を選ぶ",
   backgroundPhoto: "背景写真を選ぶ",
   sourceImage: "元画像",
-  backgroundImage: "背景画像",
   resultImage: "結果画像",
-  previewHint: "ここに元画像・背景画像・結果画像のプレビューが並びます。",
-  sessionLoading: "セッションを準備しています...",
   backgroundUploadHint: "背景合成を選んだときに有効になります",
   imageSelectHint: "画像ファイルを選択",
   completedMenu1: "調整、別の写真に変更",
@@ -63,8 +64,6 @@ const TEXT = {
   completedMenu3: "このまま続ける",
   go: "Go!",
   revise: "修正する",
-  panelImages: "画像",
-  panelActions: "操作",
   runMosaic: "モザイク処理を実行",
   runBeauty: "美肌補正を実行",
   runBrightness: "明るさ調整を実行",
@@ -100,7 +99,6 @@ const TEXT = {
   growBox: "拡大",
   shrinkBox: "縮小",
   faceGuide: "黄色の枠がモザイク対象の基準です。",
-  compareTitle: "比較プレビュー",
   beforeLabel: "Before",
   afterLabel: "After",
   sliderHint: "スライダーを動かして比較",
@@ -185,6 +183,20 @@ const FALLBACK_FACE_BOX = (imageSize: ImageSize): FaceBox => ({
   height: Math.floor(imageSize.height * 0.62),
 });
 
+function labelFor<T extends string | number>(items: Array<{ label: string; value: T }>, value: T): string {
+  return items.find((item) => item.value === value)?.label ?? String(value);
+}
+
+const STATE_PROMPTS: Partial<Record<AppStep, string>> = {
+  photo_uploaded_menu: "どの加工をしますか？",
+  mosaic_menu: "モザイクの範囲・種類・強度を選んでください。",
+  background_menu: "背景の候補を選んでください。",
+  beauty_menu: "美肌補正の種類を選んでください。",
+  brightness_menu: "明るさの調整方法を選んでください。",
+  pose_menu: "ポーズを選んでください。",
+  completed: "仕上がりはいかがですか？",
+};
+
 export default function StepGenerationFlow({ embedded = false }: { embedded?: boolean } = {}) {
   const [chat, setChat] = useState<ChatResponse>({
     state: "waiting_user_photo",
@@ -211,6 +223,30 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
   const [beforeStepFile, setBeforeStepFile] = useState<File | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
   const [compareRatio, setCompareRatio] = useState(50);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const historyIdRef = useRef(0);
+  const feedRef = useRef<HTMLDivElement | null>(null);
+
+  const nextHistoryId = useCallback(() => {
+    historyIdRef.current += 1;
+    return `msg-${historyIdRef.current}`;
+  }, []);
+
+  const pushTurn = useCallback(
+    (userText: string, options?: { userImage?: string; botImage?: string }) => {
+      const botText = chat.message ?? STATE_PROMPTS[chat.state] ?? "";
+      setHistory((current) => [
+        ...current,
+        { id: nextHistoryId(), role: "bot", text: botText, image: options?.botImage },
+        { id: nextHistoryId(), role: "user", text: userText, image: options?.userImage },
+      ]);
+    },
+    [chat.message, chat.state, nextHistoryId]
+  );
+
+  useEffect(() => {
+    feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight, behavior: "smooth" });
+  }, [history, busyLabel, recovery, chat.state]);
 
   const postChat = useCallback(
     async (body: Record<string, unknown>) => {
@@ -257,6 +293,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
 
     const imageUrl = URL.createObjectURL(file);
+    pushTurn("写真をアップロードしました", { userImage: imageUrl });
     try {
       await postChat({ event: "user_photo_uploaded", imageUrl });
     } catch (error) {
@@ -271,6 +308,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBackgroundFile(file);
     const backgroundImageUrl = URL.createObjectURL(file);
+    pushTurn("背景写真をアップロードしました", { userImage: backgroundImageUrl });
     try {
       await postChat({
         event: "background_photo_uploaded",
@@ -282,7 +320,8 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     event.target.value = "";
   }
 
-  async function selectTool(tool: ToolType) {
+  async function selectTool(tool: ToolType, label: string) {
+    pushTurn(label);
     try {
       await postChat({ event: "tool_selected", tool });
     } catch (error) {
@@ -373,6 +412,9 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("mosaic");
+    pushTurn(
+      `${labelFor(MENU.mosaicScopes, mosaicScope)} / ${labelFor(MENU.mosaicStyles, mosaicStyle)} / ${labelFor(MENU.mosaicStrengths, mosaicStrength)} で実行`
+    );
     setBusyLabel(TEXT.detectFace);
     await postChat({ event: "confirm_go" });
 
@@ -443,6 +485,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("background");
+    pushTurn(BACKGROUND_PRESET_LABELS[preset]);
 
     try {
       await postChat({ event: "confirm_go" });
@@ -460,6 +503,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("background");
+    pushTurn(TEXT.go);
 
     try {
       await postChat({ event: "confirm_go" });
@@ -480,6 +524,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("beauty");
+    pushTurn(`${labelFor(MENU.beautyModes, beautyMode)} で実行`);
 
     try {
       await postChat({ event: "confirm_go" });
@@ -497,6 +542,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("brightness");
+    pushTurn(`${labelFor(MENU.brightnessModes, brightnessMode)} で実行`);
 
     try {
       await postChat({ event: "confirm_go" });
@@ -517,6 +563,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
     setBeforeStepFile(sourceFile);
     setLastTool("pose");
+    pushTurn(`${labelFor(MENU.poseModes, poseMode)} で実行`);
 
     try {
       await postChat({ event: "confirm_go" });
@@ -538,6 +585,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
   }
 
   async function handleCompletedAdjust() {
+    pushTurn(TEXT.completedMenu1, { botImage: chat.session.resultImageUrl });
     if (beforeStepFile) setSourceFile(beforeStepFile);
     if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
   }
@@ -545,6 +593,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
   async function handleCompletedRevise() {
     const resultUrl = chat.session.resultImageUrl;
     if (!resultUrl) return;
+    pushTurn(TEXT.completedMenu2, { botImage: resultUrl });
     await postChat({ event: "continue_with_result" });
     await refreshSourceFromResult(resultUrl);
     if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
@@ -553,6 +602,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
 
   async function handleCompletedContinue() {
     const resultUrl = chat.session.resultImageUrl;
+    pushTurn(TEXT.completedMenu3, { botImage: resultUrl });
     if (resultUrl) await refreshSourceFromResult(resultUrl);
     await postChat({ event: "continue_with_result" });
   }
@@ -566,6 +616,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     setBackgroundFile(null);
     setLastTool(null);
     setBeforeStepFile(null);
+    setHistory([]);
   }
 
   async function handleRecoveryReupload() {
@@ -603,13 +654,6 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
     resetAllLocalState();
     await postChat({ event: "reset_session" });
   }
-
-  const previews = useMemo<PreviewImage[]>(() => {
-    return [
-      { label: TEXT.backgroundImage, url: chat.session.backgroundImageUrl },
-      { label: TEXT.resultImage, url: chat.session.resultImageUrl },
-    ].filter((item) => item.url);
-  }, [chat.session.backgroundImageUrl, chat.session.resultImageUrl]);
 
   async function redetectFace() {
     if (!sourceFile || !sourceImageSize) return;
@@ -674,7 +718,7 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
       }
     >
       {!embedded ? (
-        <div className="mx-auto mb-6 flex max-w-6xl items-center justify-between gap-4">
+        <div className="mx-auto mb-6 flex max-w-2xl items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.24em] text-[#c9a84c]/80">{TEXT.appName}</p>
             <h1 className="mt-2 text-3xl font-semibold text-stone-50">{TEXT.title}</h1>
@@ -688,227 +732,199 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
         </div>
       ) : null}
 
-      <div className={`mx-auto grid max-w-6xl gap-6 ${embedded ? "" : "lg:grid-cols-[1.05fr_0.95fr]"}`}>
-        <section className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-[0_0_0_1px_rgba(201,168,76,0.06),0_20px_45px_-20px_rgba(0,0,0,0.7)] sm:p-6">
-          <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="h-4 w-1 rounded-full bg-[#c9a84c]" />
-              <h2 className="text-lg font-semibold text-stone-50">チャット編集</h2>
+      <div className="mx-auto flex max-w-2xl flex-col overflow-hidden rounded-2xl border border-stone-700/70 bg-stone-900/90 shadow-[0_0_0_1px_rgba(201,168,76,0.06),0_20px_45px_-20px_rgba(0,0,0,0.7)]">
+        <div className="flex items-center justify-between border-b border-stone-800 bg-stone-950/40 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/15 text-base">🤖</span>
+            <div>
+              <p className="text-sm font-semibold text-stone-50">ステップ生成アシスタント</p>
+              <p className="text-xs text-stone-500">写真を選んで、順番に加工していきます</p>
             </div>
-            <button
-              className="rounded-lg border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-[#c9a84c]/60 hover:bg-stone-800"
-              onClick={() => {
-                resetAllLocalState();
-                void postChat({ event: "reset_session" });
-              }}
-              type="button"
-            >
-              {TEXT.newSession}
-            </button>
           </div>
+          <button
+            className="rounded-lg border border-stone-700 px-3 py-2 text-sm text-stone-200 transition hover:border-[#c9a84c]/60 hover:bg-stone-800"
+            onClick={() => {
+              resetAllLocalState();
+              void postChat({ event: "reset_session" });
+            }}
+            type="button"
+          >
+            {TEXT.newSession}
+          </button>
+        </div>
 
-          <div className="rounded-lg border border-stone-800 bg-stone-950/70 p-4">
-            <div className="space-y-4">
-              <Bubble text={chat.message} />
+        <div ref={feedRef} className="flex max-h-[70vh] min-h-[360px] flex-col gap-4 overflow-y-auto px-4 py-5 sm:px-5">
+          {history.map((entry) =>
+            entry.role === "bot" ? (
+              <BotMessage key={entry.id} text={entry.text} image={entry.image} />
+            ) : (
+              <UserMessage key={entry.id} text={entry.text} image={entry.image} />
+            )
+          )}
+
+          {!(chat.state === "processing" && busyLabel) ? (
+            <BotMessage text={chat.message ?? STATE_PROMPTS[chat.state] ?? ""}>
+              {chat.state === "waiting_user_photo" ? (
+                <UploadCard label={TEXT.userPhoto} accept="image/*" onChange={handleSourceImageChange} />
+              ) : null}
+
+              {chat.state === "photo_uploaded_menu" ? (
+                <div className="grid gap-2.5">
+                  {MENU.tools.map((item, index) => (
+                    <StepButton
+                      key={item.tool}
+                      index={index + 1}
+                      icon={item.icon}
+                      label={item.label}
+                      onClick={() => void selectTool(item.tool, `${item.icon} ${item.label}`)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {chat.state === "mosaic_menu" ? (
+                <div className="space-y-4">
+                  <OptionGroup title="範囲" items={MENU.mosaicScopes} selected={mosaicScope} onSelect={(value) => handleScopeChange(value as MosaicScope)} />
+                  <OptionGroup title="種類" items={MENU.mosaicStyles} selected={mosaicStyle} onSelect={(value) => setMosaicStyle(value as MosaicStyle)} />
+                  <OptionGroup title="強度" items={MENU.mosaicStrengths} selected={mosaicStrength} onSelect={(value) => setMosaicStrength(value as MosaicStrength)} />
+                  {chat.session.sourceImageUrl && faceBox && sourceImageSize ? (
+                    <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
+                      <SourcePreview
+                        faceBox={faceBox}
+                        imageSize={sourceImageSize}
+                        onFaceBoxChange={setFaceBox}
+                        src={chat.session.sourceImageUrl}
+                      />
+                      <div className="border-t border-stone-800 px-3 py-3 text-xs text-stone-400">{TEXT.faceGuide}</div>
+                      <div className="border-t border-stone-800 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-stone-200">{TEXT.adjustBox}</p>
+                          <ActionButton label={TEXT.detectAgain} onClick={() => void redetectFace()} muted />
+                        </div>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                          <div>
+                            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-stone-500">{TEXT.moveBox}</p>
+                            <div className="grid grid-cols-3 gap-2">
+                              <span />
+                              <MiniButton label={TEXT.moveUp} onClick={() => nudgeFaceBox(0, -12)} />
+                              <span />
+                              <MiniButton label={TEXT.moveLeft} onClick={() => nudgeFaceBox(-12, 0)} />
+                              <MiniButton label={TEXT.moveDown} onClick={() => nudgeFaceBox(0, 12)} />
+                              <MiniButton label={TEXT.moveRight} onClick={() => nudgeFaceBox(12, 0)} />
+                            </div>
+                          </div>
+                          <div>
+                            <p className="mb-2 text-xs uppercase tracking-[0.18em] text-stone-500">{TEXT.resizeBox}</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <MiniButton label={TEXT.shrinkBox} onClick={() => resizeFaceBox(-18)} />
+                              <MiniButton label={TEXT.growBox} onClick={() => resizeFaceBox(18)} />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <ActionButton label={TEXT.runMosaic} onClick={() => void runMosaic()} />
+                </div>
+              ) : null}
+
+              {chat.state === "background_menu" ? (
+                <div className="grid gap-3">
+                  <ActionButton label="フォトスタジオ風" onClick={() => void runBackgroundPreset("studio", TEXT.processStudio)} />
+                  <ActionButton label="ホテルラウンジ風" onClick={() => void runBackgroundPreset("hotel", TEXT.processHotel)} />
+                  <ActionButton label="公園" onClick={() => void runBackgroundPreset("park", TEXT.processPark)} />
+                  <ActionButton label="室内ラグジュアリー風" onClick={() => void runBackgroundPreset("luxury", TEXT.processLuxury)} />
+                  <ActionButton
+                    label="背景を合成する"
+                    onClick={() => {
+                      pushTurn("背景を合成する");
+                      setChat((current) => ({
+                        ...current,
+                        state: "waiting_background_photo",
+                        message: "背景にしたい画像をアップロードしてください。",
+                        session: {
+                          ...current.session,
+                          step: "waiting_background_photo",
+                        },
+                      }));
+                    }}
+                  />
+                </div>
+              ) : null}
+
+              {chat.state === "waiting_background_photo" ? (
+                <UploadCard label={TEXT.backgroundPhoto} accept="image/*" onChange={handleBackgroundImageChange} />
+              ) : null}
 
               {chat.state === "waiting_background_confirm" ? (
                 <div className="flex flex-wrap gap-3">
                   <ActionButton label={TEXT.go} onClick={() => void runBackgroundComposite()} />
-                  <ActionButton label={TEXT.revise} onClick={() => void postChat({ event: "tool_selected", tool: "background" })} muted />
+                  <ActionButton
+                    label={TEXT.revise}
+                    onClick={() => {
+                      pushTurn(TEXT.revise);
+                      void postChat({ event: "tool_selected", tool: "background" });
+                    }}
+                    muted
+                  />
+                </div>
+              ) : null}
+
+              {chat.state === "beauty_menu" ? (
+                <div className="space-y-4">
+                  <OptionGroup title="美肌補正" items={MENU.beautyModes} selected={beautyMode} onSelect={(value) => setBeautyMode(value as BeautyMode)} />
+                  <ActionButton label={TEXT.runBeauty} onClick={() => void runBeauty()} />
+                </div>
+              ) : null}
+
+              {chat.state === "brightness_menu" ? (
+                <div className="space-y-4">
+                  <OptionGroup title="明るさ" items={MENU.brightnessModes} selected={brightnessMode} onSelect={(value) => setBrightnessMode(value as BrightnessMode)} />
+                  <ActionButton label={TEXT.runBrightness} onClick={() => void runBrightness()} />
+                </div>
+              ) : null}
+
+              {chat.state === "pose_menu" ? (
+                <div className="space-y-4">
+                  <OptionGroup title="ポーズ" items={MENU.poseModes} selected={poseMode} onSelect={(value) => setPoseMode(value as PoseMode)} />
+                  <ActionButton label={TEXT.runPose} onClick={() => void runPose()} />
                 </div>
               ) : null}
 
               {chat.state === "completed" ? (
-                <div className="flex flex-wrap gap-3">
-                  <ActionButton label={TEXT.completedMenu1} onClick={() => void handleCompletedAdjust()} />
-                  <ActionButton label={TEXT.completedMenu2} onClick={() => void handleCompletedRevise()} muted />
-                  <ActionButton label={TEXT.completedMenu3} onClick={() => void handleCompletedContinue()} muted />
+                <div className="space-y-4">
+                  {chat.session.resultImageUrl ? (
+                    chat.session.sourceImageUrl ? (
+                      <div className="overflow-hidden rounded-lg border border-stone-800">
+                        <CompareSlider
+                          afterLabel={TEXT.afterLabel}
+                          afterSrc={chat.session.resultImageUrl}
+                          beforeLabel={TEXT.beforeLabel}
+                          beforeSrc={chat.session.sourceImageUrl}
+                          onRatioChange={setCompareRatio}
+                          ratio={compareRatio}
+                        />
+                      </div>
+                    ) : (
+                      <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img alt={TEXT.resultImage} className="max-h-80 w-full object-contain" src={chat.session.resultImageUrl} />
+                      </div>
+                    )
+                  ) : null}
+                  <div className="flex flex-wrap gap-3">
+                    <ActionButton label={TEXT.completedMenu1} onClick={() => void handleCompletedAdjust()} />
+                    <ActionButton label={TEXT.completedMenu2} onClick={() => void handleCompletedRevise()} muted />
+                    <ActionButton label={TEXT.completedMenu3} onClick={() => void handleCompletedContinue()} muted />
+                  </div>
                 </div>
               ) : null}
-            </div>
-          </div>
-        </section>
+            </BotMessage>
+          ) : null}
 
-        <section className="space-y-6">
-          <Panel title={TEXT.panelImages}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <UploadCard label={TEXT.userPhoto} accept="image/*" onChange={handleSourceImageChange} />
-              <UploadCard
-                label={TEXT.backgroundPhoto}
-                accept="image/*"
-                onChange={handleBackgroundImageChange}
-                disabled={chat.state !== "waiting_background_photo"}
-              />
-            </div>
-
-            {chat.session.sourceImageUrl ? (
-              <div className="mt-5 overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
-                <div className="border-b border-stone-800 px-3 py-2 text-sm text-stone-300">{TEXT.sourceImage}</div>
-                <SourcePreview
-                  faceBox={faceBox}
-                  imageSize={sourceImageSize}
-                  onFaceBoxChange={setFaceBox}
-                  src={chat.session.sourceImageUrl}
-                />
-                {faceBox && sourceImageSize ? (
-                  <div className="border-t border-stone-800 px-3 py-3 text-xs text-stone-400">{TEXT.faceGuide}</div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {previews.length ? (
-              <div className="mt-5 grid gap-4">
-                {previews.map((preview) => (
-                  <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950" key={preview.label}>
-                    <div className="border-b border-stone-800 px-3 py-2 text-sm text-stone-300">{preview.label}</div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt={preview.label} className="h-52 w-full object-cover" src={preview.url} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-5 text-sm text-stone-400">{TEXT.previewHint}</p>
-            )}
-
-            {chat.session.sourceImageUrl && chat.session.resultImageUrl ? (
-              <div className="mt-5 overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
-                <div className="border-b border-stone-800 px-3 py-2 text-sm text-stone-300">{TEXT.compareTitle}</div>
-                <CompareSlider
-                  afterLabel={TEXT.afterLabel}
-                  afterSrc={chat.session.resultImageUrl}
-                  beforeLabel={TEXT.beforeLabel}
-                  beforeSrc={chat.session.sourceImageUrl}
-                  onRatioChange={setCompareRatio}
-                  ratio={compareRatio}
-                />
-              </div>
-            ) : null}
-          </Panel>
-
-          <Panel title={TEXT.panelActions}>
-            {chat.state === "photo_uploaded_menu" ? (
-              <div className="grid gap-2.5">
-                {MENU.tools.map((item, index) => (
-                  <StepButton
-                    key={item.tool}
-                    index={index + 1}
-                    icon={item.icon}
-                    label={item.label}
-                    onClick={() => void selectTool(item.tool)}
-                  />
-                ))}
-              </div>
-            ) : null}
-
-            {chat.state === "mosaic_menu" ? (
-              <div className="space-y-4">
-                <OptionGroup title="範囲" items={MENU.mosaicScopes} selected={mosaicScope} onSelect={(value) => handleScopeChange(value as MosaicScope)} />
-                <OptionGroup title="種類" items={MENU.mosaicStyles} selected={mosaicStyle} onSelect={(value) => setMosaicStyle(value as MosaicStyle)} />
-                <OptionGroup title="強度" items={MENU.mosaicStrengths} selected={mosaicStrength} onSelect={(value) => setMosaicStrength(value as MosaicStrength)} />
-                <ActionButton label={TEXT.runMosaic} onClick={() => void runMosaic()} />
-                {faceBox && sourceImageSize ? (
-                  <div className="rounded-lg border border-stone-800 bg-stone-950 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-stone-200">{TEXT.adjustBox}</p>
-                      <ActionButton label={TEXT.detectAgain} onClick={() => void redetectFace()} muted />
-                    </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-stone-500">{TEXT.moveBox}</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <span />
-                          <MiniButton label={TEXT.moveUp} onClick={() => nudgeFaceBox(0, -12)} />
-                          <span />
-                          <MiniButton label={TEXT.moveLeft} onClick={() => nudgeFaceBox(-12, 0)} />
-                          <MiniButton label={TEXT.moveDown} onClick={() => nudgeFaceBox(0, 12)} />
-                          <MiniButton label={TEXT.moveRight} onClick={() => nudgeFaceBox(12, 0)} />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="mb-2 text-xs uppercase tracking-[0.18em] text-stone-500">{TEXT.resizeBox}</p>
-                        <div className="grid grid-cols-2 gap-2">
-                          <MiniButton label={TEXT.shrinkBox} onClick={() => resizeFaceBox(-18)} />
-                          <MiniButton label={TEXT.growBox} onClick={() => resizeFaceBox(18)} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            {chat.state === "background_menu" ? (
-              <div className="grid gap-3">
-                <ActionButton label="フォトスタジオ風" onClick={() => void runBackgroundPreset("studio", TEXT.processStudio)} />
-                <ActionButton label="ホテルラウンジ風" onClick={() => void runBackgroundPreset("hotel", TEXT.processHotel)} />
-                <ActionButton label="公園" onClick={() => void runBackgroundPreset("park", TEXT.processPark)} />
-                <ActionButton label="室内ラグジュアリー風" onClick={() => void runBackgroundPreset("luxury", TEXT.processLuxury)} />
-                <ActionButton
-                  label="背景を合成する"
-                  onClick={() =>
-                    setChat((current) => ({
-                      ...current,
-                      state: "waiting_background_photo",
-                      message: "背景にしたい画像をアップロードしてください。",
-                      session: {
-                        ...current.session,
-                        step: "waiting_background_photo",
-                      },
-                    }))
-                  }
-                />
-              </div>
-            ) : null}
-
-            {chat.state === "beauty_menu" ? (
-              <div className="space-y-4">
-                <OptionGroup
-                  title="美肌補正"
-                  items={MENU.beautyModes}
-                  selected={beautyMode}
-                  onSelect={(value) => setBeautyMode(value as BeautyMode)}
-                />
-                <ActionButton label={TEXT.runBeauty} onClick={() => void runBeauty()} />
-              </div>
-            ) : null}
-
-            {chat.state === "brightness_menu" ? (
-              <div className="space-y-4">
-                <OptionGroup
-                  title="明るさ"
-                  items={MENU.brightnessModes}
-                  selected={brightnessMode}
-                  onSelect={(value) => setBrightnessMode(value as BrightnessMode)}
-                />
-                <ActionButton label={TEXT.runBrightness} onClick={() => void runBrightness()} />
-              </div>
-            ) : null}
-
-            {chat.state === "pose_menu" ? (
-              <div className="space-y-4">
-                <OptionGroup
-                  title="ポーズ"
-                  items={MENU.poseModes}
-                  selected={poseMode}
-                  onSelect={(value) => setPoseMode(value as PoseMode)}
-                />
-                <ActionButton label={TEXT.runPose} onClick={() => void runPose()} />
-              </div>
-            ) : null}
-
-            {!chat ? <p className="text-sm text-stone-400">{TEXT.sessionLoading}</p> : null}
-          </Panel>
-        </section>
-      </div>
-
-      {busyLabel && !recovery ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-[#c9a84c]/20 bg-stone-900 p-6 text-center shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)]">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-stone-700 border-t-[#c9a84c]" />
-            <p className="mt-4 text-base font-medium text-stone-100">{busyLabel}</p>
-          </div>
+          {busyLabel ? <TypingBubble label={busyLabel} /> : null}
         </div>
-      ) : null}
+      </div>
 
       {recovery ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/75 px-4 backdrop-blur-sm">
@@ -928,24 +944,70 @@ export default function StepGenerationFlow({ embedded = false }: { embedded?: bo
   );
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function BotMessage({
+  text,
+  image,
+  children,
+}: {
+  text: string;
+  image?: string;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="rounded-xl border border-stone-700/70 bg-stone-900/90 p-5 shadow-[0_0_0_1px_rgba(201,168,76,0.06),0_16px_36px_-18px_rgba(0,0,0,0.7)]">
-      <div className="flex items-center gap-2">
-        <span className="h-3.5 w-1 rounded-full bg-[#c9a84c]" />
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-300">{title}</h2>
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/15 text-xs">
+        🤖
+      </span>
+      <div className="flex max-w-[88%] flex-col gap-2">
+        {text ? (
+          <div className="rounded-2xl rounded-tl-sm bg-stone-800 px-4 py-2.5 text-sm leading-relaxed text-stone-100">
+            {text}
+          </div>
+        ) : null}
+        {image ? (
+          <div className="overflow-hidden rounded-2xl rounded-tl-sm border border-stone-800 bg-stone-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" className="max-h-64 w-full object-contain" src={image} />
+          </div>
+        ) : null}
+        {children ? <div className="flex flex-col gap-3">{children}</div> : null}
       </div>
-      <div className="mt-4">{children}</div>
     </div>
   );
 }
 
-function Bubble({ text }: { text?: string }) {
-  if (!text) return null;
-
+function UserMessage({ text, image }: { text: string; image?: string }) {
   return (
-    <div className="flex">
-      <div className="max-w-[90%] rounded-lg bg-[#ddc37e] px-4 py-3 text-sm text-stone-950">{text}</div>
+    <div className="flex items-start justify-end gap-2.5">
+      <div className="flex max-w-[80%] flex-col items-end gap-2">
+        {image ? (
+          <div className="overflow-hidden rounded-2xl rounded-tr-sm border border-[#c9a84c]/30 bg-stone-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img alt="" className="max-h-56 w-full object-contain" src={image} />
+          </div>
+        ) : null}
+        <div className="rounded-2xl rounded-tr-sm bg-[#ddc37e] px-4 py-2.5 text-sm font-medium text-stone-950">
+          {text}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TypingBubble({ label }: { label: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#c9a84c]/15 text-xs">
+        🤖
+      </span>
+      <div className="flex items-center gap-2.5 rounded-2xl rounded-tl-sm bg-stone-800 px-4 py-2.5 text-sm text-stone-300">
+        <span className="flex gap-1">
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a84c] [animation-delay:-0.3s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a84c] [animation-delay:-0.15s]" />
+          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#c9a84c]" />
+        </span>
+        {label}
+      </div>
     </div>
   );
 }
