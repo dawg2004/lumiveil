@@ -382,6 +382,7 @@ export default function StepGenerationFlow({
     formData.set("file", file);
     formData.set("prompt", prompt);
     formData.set("resolution", "1k");
+    formData.set("provider", "openai");
     if (file2) formData.set("file2", file2);
     return formData;
   }
