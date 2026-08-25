@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { uploadToStorage } from "@/lib/upload-to-storage";
+import { uploadBufferToStorage, uploadToStorage } from "@/lib/upload-to-storage";
 import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_EDIT_MODEL = "gpt-image-1.5";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 const FACE_PRESERVATION_PROMPT =
   "Identity lock: preserve the exact same person from the input image. Keep the face, facial structure, eyes, nose, mouth, jawline, expression, hairstyle, hairline, skin tone, age, and body proportions unchanged. Do not beautify, replace, redraw, stylize, retouch, or reinterpret the face. Edit only the requested non-identity details and keep the image photorealistic.";
@@ -89,6 +91,68 @@ function getFalEditError(status: number, body: string) {
   return `Grok編集に失敗しました。(${status}) ${redacted.slice(0, 240)}`;
 }
 
+function getOpenAiEditError(status: number, body: string) {
+  let message = body;
+
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: string; code?: string } };
+    if (parsed.error?.message) {
+      message = parsed.error.message;
+    }
+  } catch {
+    // noop
+  }
+
+  if (status === 403 || /organization|verif/i.test(message)) {
+    return "GPT Image APIの利用には組織の本人確認（Organization Verification）が必要です。OpenAIの管理画面で確認してください。";
+  }
+
+  if (/safety|content_policy/i.test(message)) {
+    return "GPT Image側の安全フィルターで編集できませんでした。表現を弱めて別の内容で試してください。";
+  }
+
+  const redacted = message.replace(/data:image\/[^"'\s]+/g, "[uploaded image]");
+  return `GPT Image編集に失敗しました。(${status}) ${redacted.slice(0, 240)}`;
+}
+
+async function callOpenAiEdit(files: File[], prompt: string, resolution: string): Promise<Buffer> {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
+  const formData = new FormData();
+  formData.set("model", OPENAI_EDIT_MODEL);
+  formData.set("prompt", prompt);
+  formData.set("size", "auto");
+  formData.set("quality", resolution === "2k" ? "high" : "medium");
+  formData.set("n", "1");
+  formData.set("output_format", "jpeg");
+  for (const file of files) {
+    formData.append("image[]", file);
+  }
+
+  const response = await fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(getOpenAiEditError(response.status, text));
+  }
+
+  const data = await response.json();
+  const b64 = data.data?.[0]?.b64_json;
+  if (!b64) {
+    throw new Error("GPT Imageのレスポンスに画像データが含まれていませんでした。");
+  }
+
+  return Buffer.from(b64, "base64");
+}
+
 function encodeHistoryPrompt(input: { kind: "image" | "video"; prompt: string; url: string }) {
   return `${HISTORY_PREFIX}${JSON.stringify(input)}`;
 }
@@ -164,10 +228,6 @@ async function decrementCredits(adminClient: SupabaseClient, shopId: string, cur
 
 export async function POST(req: NextRequest) {
   try {
-    if (!FAL_KEY) {
-      return NextResponse.json({ error: "FAL_API_KEY is not configured" }, { status: 500 });
-    }
-
     const { user, client } = await getAuthenticatedContext(req);
     if (!user) {
       return NextResponse.json({ error: "ログイン状態が切れています。もう一度ログインしてください。" }, { status: 401 });
@@ -197,6 +257,7 @@ export async function POST(req: NextRequest) {
     const file2 = formData.get("file2");
     const prompt = String(formData.get("prompt") ?? "").trim();
     const resolution = String(formData.get("resolution") ?? "1k");
+    const provider = String(formData.get("provider") ?? "grok") === "openai" ? "openai" : "grok";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -210,44 +271,62 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "invalid resolution" }, { status: 400 });
     }
 
-    const imageUrl = await uploadToFal(file);
-    const imageUrls = [imageUrl];
-    if (file2 instanceof File) {
-      imageUrls.push(await uploadToFal(file2));
-    }
+    let url: string;
+    let revisedPrompt = "";
 
-    const response = await fetch(`https://fal.run/${GROK_EDIT_MODEL}`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Key ${FAL_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt: `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
-        image_urls: imageUrls,
-        num_images: 1,
-        aspect_ratio: "auto",
-        resolution,
-        output_format: "jpeg",
-      }),
-    });
+    if (provider === "openai") {
+      const files = [file, ...(file2 instanceof File ? [file2] : [])];
+      const buffer = await callOpenAiEdit(
+        files,
+        `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
+        resolution
+      );
+      url = await uploadBufferToStorage(buffer, "image/jpeg", "image");
+    } else {
+      if (!FAL_KEY) {
+        return NextResponse.json({ error: "FAL_API_KEY is not configured" }, { status: 500 });
+      }
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(getFalEditError(response.status, text));
-    }
+      const imageUrl = await uploadToFal(file);
+      const imageUrls = [imageUrl];
+      if (file2 instanceof File) {
+        imageUrls.push(await uploadToFal(file2));
+      }
 
-    const data = await response.json();
-    const falUrl = data.images?.[0]?.url;
-    if (!falUrl) {
-      throw new Error("URL not found");
-    }
+      const response = await fetch(`https://fal.run/${GROK_EDIT_MODEL}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Key ${FAL_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
+          image_urls: imageUrls,
+          num_images: 1,
+          aspect_ratio: "auto",
+          resolution,
+          output_format: "jpeg",
+        }),
+      });
 
-    let url = falUrl;
-    try {
-      url = await uploadToStorage(falUrl, "image");
-    } catch (err) {
-      console.error("Edit storage upload failed, using fal URL:", err);
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(getFalEditError(response.status, text));
+      }
+
+      const data = await response.json();
+      const falUrl = data.images?.[0]?.url;
+      if (!falUrl) {
+        throw new Error("URL not found");
+      }
+
+      revisedPrompt = data.revised_prompt ?? "";
+      url = falUrl;
+      try {
+        url = await uploadToStorage(falUrl, "image");
+      } catch (err) {
+        console.error("Edit storage upload failed, using fal URL:", err);
+      }
     }
 
     const adminClient = createAdminSupabaseClient();
@@ -256,7 +335,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       url,
-      revisedPrompt: data.revised_prompt ?? "",
+      revisedPrompt,
       credits,
     });
   } catch (error) {
