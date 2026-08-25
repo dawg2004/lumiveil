@@ -485,7 +485,8 @@ export default function StepGenerationFlow({
       }
 
       if (!response.ok) {
-        throw new Error(TEXT.mosaicError);
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error ?? TEXT.mosaicError);
       }
 
       const blob = await response.blob();

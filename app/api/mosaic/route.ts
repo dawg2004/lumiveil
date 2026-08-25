@@ -717,7 +717,10 @@ export async function POST(req: NextRequest) {
 
     const access = evaluateTabAccess(shop, "mosaic", getRequestIp(req));
     if (!access.ok) {
-      return NextResponse.json({ error: access.error }, { status: access.status });
+      const stepAccess = evaluateTabAccess(shop, "step", getRequestIp(req));
+      if (!stepAccess.ok) {
+        return NextResponse.json({ error: access.error }, { status: access.status });
+      }
     }
 
     const currentCredits = Number(shop.credits ?? 0);
