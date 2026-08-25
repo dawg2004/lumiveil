@@ -68,12 +68,16 @@ const TEXT = {
   runBeauty: "美肌補正を実行",
   runBrightness: "明るさ調整を実行",
   runPose: "ポーズ変更を実行",
+  runCustom: "この内容で実行",
+  customPromptPlaceholder: "例: 背景を夜景に変えて、笑顔にしてください",
+  customPromptRequired: "実行したい内容を入力してください。",
   processMosaic: "モザイク処理中...",
   detectFace: "顔を検出中...",
   processBackground: "背景を自然に合成中...",
   processBeauty: "美肌補正中...",
   processBrightness: "明るさを調整中...",
   processPose: "ポーズを整えています...",
+  processCustom: "生成中...",
   processStudio: "フォトスタジオ風へ背景変更中...",
   processHotel: "ホテルラウンジ風へ背景変更中...",
   processPark: "公園背景へ変更中...",
@@ -111,6 +115,7 @@ const MENU = {
     { label: "美肌補正", tool: "beauty" as ToolType, icon: "✨" },
     { label: "明るさ調整", tool: "brightness" as ToolType, icon: "☀️" },
     { label: "ポーズ変更", tool: "pose" as ToolType, icon: "🧍" },
+    { label: "自由入力で加工", tool: "custom" as ToolType, icon: "✏️" },
   ],
   mosaicScopes: [
     { label: "顔全体", value: "face" as MosaicScope },
@@ -194,6 +199,7 @@ const STATE_PROMPTS: Partial<Record<AppStep, string>> = {
   beauty_menu: "美肌補正の種類を選んでください。",
   brightness_menu: "明るさの調整方法を選んでください。",
   pose_menu: "ポーズを選んでください。",
+  custom_menu: "実行したい加工内容を自由に入力してください。",
   completed: "仕上がりはいかがですか？",
 };
 
@@ -226,6 +232,7 @@ export default function StepGenerationFlow({
   const [beautyMode, setBeautyMode] = useState<BeautyMode>("natural");
   const [brightnessMode, setBrightnessMode] = useState<BrightnessMode>("natural");
   const [poseMode, setPoseMode] = useState<PoseMode>("elegant");
+  const [customPrompt, setCustomPrompt] = useState("");
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
   const [lastTool, setLastTool] = useState<ToolType | null>(null);
   const [beforeStepFile, setBeforeStepFile] = useState<File | null>(null);
@@ -595,11 +602,36 @@ export default function StepGenerationFlow({
     }
   }
 
+  async function runCustom() {
+    if (!sourceFile) return;
+
+    const trimmedPrompt = customPrompt.trim();
+    if (!trimmedPrompt) {
+      window.alert(TEXT.customPromptRequired);
+      return;
+    }
+
+    setBeforeStepFile(sourceFile);
+    setLastTool("custom");
+    pushTurn(trimmedPrompt);
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(buildEditFormData(sourceFile, trimmedPrompt), TEXT.processCustom);
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
   function rerunLastTool() {
     if (lastTool === "mosaic") return runMosaic();
     if (lastTool === "beauty") return runBeauty();
     if (lastTool === "brightness") return runBrightness();
     if (lastTool === "pose") return runPose();
+    if (lastTool === "custom") return runCustom();
     return Promise.resolve();
   }
 
@@ -635,6 +667,7 @@ export default function StepGenerationFlow({
     setBackgroundFile(null);
     setLastTool(null);
     setBeforeStepFile(null);
+    setCustomPrompt("");
     setHistory([]);
   }
 
@@ -663,7 +696,7 @@ export default function StepGenerationFlow({
       ...current,
       state: "photo_uploaded_menu",
       message: undefined,
-      menu: ["1. モザイク処理", "2. 背景変更", "3. 美肌補正", "4. 明るさ調整", "5. ポーズ変更"],
+      menu: ["1. モザイク処理", "2. 背景変更", "3. 美肌補正", "4. 明るさ調整", "5. ポーズ変更", "6. 自由入力で加工"],
       session: { ...current.session, step: "photo_uploaded_menu", selectedTool: undefined },
     }));
   }
@@ -907,6 +940,17 @@ export default function StepGenerationFlow({
                 <div className="space-y-4">
                   <OptionGroup title="ポーズ" items={MENU.poseModes} selected={poseMode} onSelect={(value) => setPoseMode(value as PoseMode)} />
                   <ActionButton label={TEXT.runPose} onClick={() => void runPose()} />
+                </div>
+              ) : null}
+
+              {chat.state === "custom_menu" ? (
+                <div className="space-y-3">
+                  <PromptTextarea
+                    onChange={setCustomPrompt}
+                    placeholder={TEXT.customPromptPlaceholder}
+                    value={customPrompt}
+                  />
+                  <ActionButton label={TEXT.runCustom} onClick={() => void runCustom()} />
                 </div>
               ) : null}
 
@@ -1252,6 +1296,26 @@ function StepButton({
       </span>
       <span className="text-stone-600 transition group-hover:translate-x-0.5 group-hover:text-[#c9a84c]">→</span>
     </button>
+  );
+}
+
+function PromptTextarea({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <textarea
+      className="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-3 text-sm text-stone-100 placeholder:text-stone-500 focus:border-[#c9a84c]/60 focus:outline-none"
+      onChange={(event) => onChange(event.target.value)}
+      placeholder={placeholder}
+      rows={4}
+      value={value}
+    />
   );
 }
 

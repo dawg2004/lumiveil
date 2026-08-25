@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
       if (body.tool === "beauty") session.step = "beauty_menu";
       if (body.tool === "brightness") session.step = "brightness_menu";
       if (body.tool === "pose") session.step = "pose_menu";
+      if (body.tool === "custom") session.step = "custom_menu";
 
       saveSession(session);
       return NextResponse.json(buildResponse(session));

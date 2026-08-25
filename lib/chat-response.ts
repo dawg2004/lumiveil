@@ -18,6 +18,7 @@ export function buildResponse(session: EditSession): ChatResponse {
           "3. 美肌補正",
           "4. 明るさ調整",
           "5. ポーズ変更",
+          "6. 自由入力で加工",
         ],
         session,
       };
@@ -98,6 +99,13 @@ export function buildResponse(session: EditSession): ChatResponse {
           "3. ソファに座る",
           "4. 立ち姿を整える",
         ],
+        session,
+      };
+
+    case "custom_menu":
+      return {
+        state: session.step,
+        message: "実行したい加工内容を自由に入力してください。",
         session,
       };
 
