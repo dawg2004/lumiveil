@@ -3,7 +3,8 @@ export type ToolType =
   | "background"
   | "beauty"
   | "brightness"
-  | "pose";
+  | "pose"
+  | "custom";
 
 export type AppStep =
   | "waiting_user_photo"
@@ -15,6 +16,7 @@ export type AppStep =
   | "beauty_menu"
   | "brightness_menu"
   | "pose_menu"
+  | "custom_menu"
   | "processing"
   | "completed"
   | "rejected";
