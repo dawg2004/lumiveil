@@ -285,7 +285,8 @@ export async function POST(req: NextRequest) {
     const access = evaluateTabAccess(shop, "edit", getRequestIp(req));
     if (!access.ok) {
       const stepAccess = evaluateTabAccess(shop, "step", getRequestIp(req));
-      if (!stepAccess.ok) {
+      const faceswapAccess = evaluateTabAccess(shop, "faceswap", getRequestIp(req));
+      if (!stepAccess.ok && !faceswapAccess.ok) {
         return NextResponse.json({ error: access.error }, { status: access.status });
       }
     }

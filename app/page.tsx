@@ -26,6 +26,9 @@ const ATLAS_VIDEO_VARIANTS: Partial<Record<VideoModel, { variant: string; label:
   atlas_wan26_flash: { variant: "wan26_flash", label: "Wan-2.6 Flash" },
 };
 
+const HEAD_SWAP_PROMPT =
+  "Composite these two photos into a single photorealistic image. Keep the body, pose, clothing, and background from the FIRST image exactly as they are. Replace everything from the neck up — head, hairstyle, hair color, and facial features — with the head from the SECOND image. Match the skin tone, lighting direction, color grading, and camera angle so the new head attaches naturally and seamlessly to the first image's neck and body. Do not change the body, clothing, pose, or background from the first image, and do not include anything from the second image other than the head and hairstyle.";
+
 type EditResolution = "1k" | "2k";
 type EditModel = "grok" | "lumiveil_v1.0" | "atlas" | "qwen";
 type RegisteredAvatar = {
@@ -254,6 +257,7 @@ export default function Home() {
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
+  const [faceswapAiModel, setFaceswapAiModel] = useState<"grok" | "qwen">("grok");
   // analyze
   const [analyzeFile, setAnalyzeFile] = useState<File | null>(null);
   const [analyzeSrc, setAnalyzeSrc] = useState<string | null>(null);
@@ -1091,6 +1095,35 @@ export default function Home() {
       setFaceswapLoading(false);
     }
   }, [faceFile, targetFile, getAuthToken, loadHistory]);
+
+  const runHeadSwapComposite = useCallback(async () => {
+    if (!faceFile || !targetFile) return;
+    setFaceswapLoading(true);
+    setFaceswapStatus("頭部を合成中...");
+    setFaceswapResult(null);
+    try {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      formData.append("file", targetFile);
+      formData.append("file2", faceFile);
+      formData.append("prompt", HEAD_SWAP_PROMPT);
+      formData.append("resolution", "1k");
+      if (faceswapAiModel === "qwen") formData.append("provider", "qwen");
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
+      const data = await parseJsonResponse(res);
+      if (!res.ok || data.error) throw new Error(data.error ?? "頭部合成に失敗しました");
+      setFaceswapResult(data.url);
+      setFaceswapStatus("完成！");
+      if (data.credits != null) setCredits(data.credits);
+      void loadHistory();
+    } catch (error) {
+      setFaceswapStatus(error instanceof Error ? error.message : "エラーが発生しました");
+    } finally {
+      setFaceswapLoading(false);
+    }
+  }, [faceFile, targetFile, faceswapAiModel, getAuthToken, loadHistory]);
 
   const resetFaceswap = useCallback(() => {
     setFaceFile(null);
@@ -3497,7 +3530,45 @@ export default function Home() {
                   >
                     {faceswapLoading ? "処理中..." : "顔ハメする"}
                   </button>
-                  <button onClick={resetFaceswap} style={{ ...smallButtonStyle, width: "100%", marginTop: 10 }}>
+                  <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258" }}>
+                    顔のパーツだけを差し替え、髪型・輪郭は体画像側のまま
+                  </div>
+
+                  <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(0,0,0,0.08)" }}>
+                    <div style={{ ...sectionLabelStyle, marginBottom: 8 }}>AI生成で頭部合成（髪型ごと）</div>
+                    <div style={buttonRowStyle}>
+                      {([
+                        { id: "grok", label: "Grok Imagine" },
+                        { id: "qwen", label: "Qwen Image Edit 2.0" },
+                      ] as { id: "grok" | "qwen"; label: string }[]).map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => setFaceswapAiModel(m.id)}
+                          style={{ ...choiceButtonStyle(faceswapAiModel === m.id), fontSize: 12 }}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => void runHeadSwapComposite()}
+                      disabled={!faceFile || !targetFile || faceswapLoading}
+                      style={{
+                        ...actionButtonStyle,
+                        width: "100%",
+                        marginTop: 10,
+                        opacity: !faceFile || !targetFile || faceswapLoading ? 0.5 : 1,
+                        cursor: !faceFile || !targetFile || faceswapLoading ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {faceswapLoading ? "処理中..." : "頭部から合成する"}
+                    </button>
+                    <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258" }}>
+                      生成AIで頭部（髪型込み）を丸ごと再合成します。仕上がりが顔ハメより変わる場合があります
+                    </div>
+                  </div>
+
+                  <button onClick={resetFaceswap} style={{ ...smallButtonStyle, width: "100%", marginTop: 16 }}>
                     リセット
                   </button>
                 </div>
