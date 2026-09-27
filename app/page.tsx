@@ -3561,10 +3561,12 @@ export default function Home() {
                         cursor: !faceFile || !targetFile || faceswapLoading ? "not-allowed" : "pointer",
                       }}
                     >
-                      {faceswapLoading ? "処理中..." : "頭部から合成する"}
+                      {faceswapLoading ? "処理中..." : faceswapAiModel === "qwen" ? "顔のみ合成" : "頭部から合成する"}
                     </button>
                     <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258" }}>
-                      生成AIで頭部（髪型込み）を丸ごと再合成します。仕上がりが顔ハメより変わる場合があります
+                      {faceswapAiModel === "qwen"
+                        ? "Qwen Image Edit 2.0は髪型ごとの頭部合成には対応していません。顔のみの合成になります"
+                        : "生成AIで頭部（髪型込み）を丸ごと再合成します。仕上がりが顔ハメより変わる場合があります"}
                     </div>
                   </div>
 
