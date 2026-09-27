@@ -27,7 +27,7 @@ const ATLAS_VIDEO_VARIANTS: Partial<Record<VideoModel, { variant: string; label:
 };
 
 type EditResolution = "1k" | "2k";
-type EditModel = "grok" | "lumiveil_v1.0" | "atlas";
+type EditModel = "grok" | "lumiveil_v1.0" | "atlas" | "qwen";
 type RegisteredAvatar = {
   id: string;
   name: string;
@@ -235,6 +235,7 @@ export default function Home() {
   const [bgLoading, setBgLoading] = useState(false);
   const [bgResult, setBgResult] = useState<string | null>(null);
   const [bgStatus, setBgStatus] = useState("");
+  const [bgModel, setBgModel] = useState<"grok" | "qwen">("grok");
 
   const [editFile, setEditFile] = useState<File | null>(null);
   const [editSrc, setEditSrc] = useState<string | null>(null);
@@ -950,6 +951,7 @@ export default function Home() {
         formData.append("file", bgFile);
         formData.append("prompt", prompt);
         formData.append("resolution", "1k");
+        if (bgModel === "qwen") formData.append("provider", "qwen");
         if (file2) formData.append("file2", file2);
 
         const token = await getAuthToken();
@@ -968,7 +970,7 @@ export default function Home() {
         setBgLoading(false);
       }
     },
-    [bgFile, getAuthToken, loadHistory]
+    [bgFile, bgModel, getAuthToken, loadHistory]
   );
 
   const runBgPreset = useCallback(
@@ -1037,9 +1039,10 @@ export default function Home() {
         void loadHistory();
         setEditStatus("Wan-2.6編集が完了しました。");
       } else {
-        setEditStatus("Grok Imagine で編集中...");
+        setEditStatus(editModel === "qwen" ? "Qwen Image Edit 2.0 で編集中..." : "Grok Imagine で編集中...");
         formData.append("model", editModel);
         formData.append("resolution", editResolution);
+        if (editModel === "qwen") formData.append("provider", "qwen");
         const res = await fetch("/api/edit", { method: "POST", body: formData });
         const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "編集に失敗しました");
@@ -1828,6 +1831,25 @@ export default function Home() {
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={panelStyle}>
+                  <div style={sectionLabelStyle}>モデル</div>
+                  <div style={buttonRowStyle}>
+                    {([
+                      { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
+                      { id: "qwen", label: "Qwen Image Edit 2.0", desc: "顔保持が得意" },
+                    ] as { id: "grok" | "qwen"; label: string; desc: string }[]).map(m => (
+                      <button
+                        key={m.id}
+                        onClick={() => setBgModel(m.id)}
+                        style={{ ...choiceButtonStyle(bgModel === m.id), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 14px" }}
+                      >
+                        <span style={{ fontWeight: 600, fontSize: 12 }}>{m.label}</span>
+                        <span style={{ fontSize: 10, opacity: 0.75 }}>{m.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={panelStyle}>
                   <div style={sectionLabelStyle}>背景スタイル</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {(Object.keys(BACKGROUND_PRESET_LABELS) as BackgroundPreset[]).map(preset => (
@@ -1847,7 +1869,7 @@ export default function Home() {
                     ))}
                   </div>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
-                    接続先: fal.ai / xai/grok-imagine-image/quality/edit・料金目安: 1クレジット
+                    接続先: {bgModel === "qwen" ? "fal.ai / fal-ai/qwen-image-2/edit" : "fal.ai / xai/grok-imagine-image/quality/edit"}・料金目安: 1クレジット
                   </div>
                 </div>
 
@@ -3161,6 +3183,7 @@ export default function Home() {
                   <div style={buttonRowStyle}>
                     {([
                       { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
+                      { id: "qwen", label: "Qwen Image Edit 2.0", desc: "顔保持が得意" },
                       { id: "atlas", label: "Wan-2.6", desc: "画像編集特化" },
                     ] as { id: EditModel; label: string; desc: string }[]).map(m => (
                       <button
@@ -3176,7 +3199,9 @@ export default function Home() {
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
                     {editModel === "atlas"
                       ? "接続先: atlascloud.ai / alibaba/wan-2.6/image-edit"
-                      : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
+                      : editModel === "qwen"
+                        ? "接続先: fal.ai / fal-ai/qwen-image-2/edit"
+                        : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
                   </div>
                 </div>
 

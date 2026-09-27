@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
+const QWEN_EDIT_MODEL = "fal-ai/qwen-image-2/edit";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -69,7 +70,7 @@ function getErrorMessage(error: unknown): string {
   return String(error);
 }
 
-function getFalEditError(status: number, body: string) {
+function getFalEditError(providerLabel: string, status: number, body: string) {
   let message = body;
 
   try {
@@ -84,11 +85,52 @@ function getFalEditError(status: number, body: string) {
   }
 
   if (message.includes("content could not be processed")) {
-    return "Grok側の安全フィルターで編集できませんでした。露出や性的表現を弱めて、別の表現で試してください。";
+    return `${providerLabel}側の安全フィルターで編集できませんでした。露出や性的表現を弱めて、別の表現で試してください。`;
   }
 
   const redacted = message.replace(/data:image\/[^"'\\s]+/g, "[uploaded image]");
-  return `Grok編集に失敗しました。(${status}) ${redacted.slice(0, 240)}`;
+  return `${providerLabel}編集に失敗しました。(${status}) ${redacted.slice(0, 240)}`;
+}
+
+async function callFalEditModel(
+  modelId: string,
+  providerLabel: string,
+  imageUrls: string[],
+  prompt: string,
+  extraBody: Record<string, unknown>
+): Promise<{ url: string; revisedPrompt: string }> {
+  const response = await fetch(`https://fal.run/${modelId}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Key ${FAL_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt,
+      image_urls: imageUrls,
+      ...extraBody,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(getFalEditError(providerLabel, response.status, text));
+  }
+
+  const data = await response.json();
+  const falUrl = data.images?.[0]?.url;
+  if (!falUrl) {
+    throw new Error("URL not found");
+  }
+
+  let url = falUrl;
+  try {
+    url = await uploadToStorage(falUrl, "image");
+  } catch (err) {
+    console.error(`${providerLabel} edit storage upload failed, using fal URL:`, err);
+  }
+
+  return { url, revisedPrompt: data.revised_prompt ?? "" };
 }
 
 function getOpenAiEditError(status: number, body: string) {
@@ -257,7 +299,8 @@ export async function POST(req: NextRequest) {
     const file2 = formData.get("file2");
     const prompt = String(formData.get("prompt") ?? "").trim();
     const resolution = String(formData.get("resolution") ?? "1k");
-    const provider = String(formData.get("provider") ?? "grok") === "openai" ? "openai" : "grok";
+    const providerRaw = String(formData.get("provider") ?? "grok");
+    const provider = providerRaw === "openai" ? "openai" : providerRaw === "qwen" ? "qwen" : "grok";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -293,40 +336,22 @@ export async function POST(req: NextRequest) {
         imageUrls.push(await uploadToFal(file2));
       }
 
-      const response = await fetch(`https://fal.run/${GROK_EDIT_MODEL}`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Key ${FAL_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt: `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
-          image_urls: imageUrls,
-          num_images: 1,
-          aspect_ratio: "auto",
-          resolution,
-          output_format: "jpeg",
-        }),
-      });
+      const fullPrompt = `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`;
 
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(getFalEditError(response.status, text));
-      }
+      const result = provider === "qwen"
+        ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
+            num_images: 1,
+            output_format: "jpeg",
+          })
+        : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
+            num_images: 1,
+            aspect_ratio: "auto",
+            resolution,
+            output_format: "jpeg",
+          });
 
-      const data = await response.json();
-      const falUrl = data.images?.[0]?.url;
-      if (!falUrl) {
-        throw new Error("URL not found");
-      }
-
-      revisedPrompt = data.revised_prompt ?? "";
-      url = falUrl;
-      try {
-        url = await uploadToStorage(falUrl, "image");
-      } catch (err) {
-        console.error("Edit storage upload failed, using fal URL:", err);
-      }
+      url = result.url;
+      revisedPrompt = result.revisedPrompt;
     }
 
     const adminClient = createAdminSupabaseClient();
