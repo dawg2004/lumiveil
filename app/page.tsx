@@ -30,7 +30,7 @@ const HEAD_SWAP_PROMPT =
   "Composite these two photos into a single photorealistic image. Keep the body, pose, clothing, and background from the FIRST image exactly as they are. Replace everything from the neck up — head, hairstyle, hair color, and facial features — with the head from the SECOND image. Match the skin tone, lighting direction, color grading, and camera angle so the new head attaches naturally and seamlessly to the first image's neck and body. Do not change the body, clothing, pose, or background from the first image, and do not include anything from the second image other than the head and hairstyle.";
 
 type EditResolution = "1k" | "2k";
-type EditModel = "grok" | "lumiveil_v1.0" | "atlas" | "qwen";
+type EditModel = "grok" | "lumiveil_v1.0" | "atlas" | "qwen" | "seedream";
 type RegisteredAvatar = {
   id: string;
   name: string;
@@ -1043,10 +1043,14 @@ export default function Home() {
         void loadHistory();
         setEditStatus("Wan-2.6編集が完了しました。");
       } else {
-        setEditStatus(editModel === "qwen" ? "Qwen Image Edit 2.0 で編集中..." : "Grok Imagine で編集中...");
+        setEditStatus(
+          editModel === "qwen" ? "Qwen Image Edit 2.0 で編集中..." :
+          editModel === "seedream" ? "Seedream v5 Pro で編集中..." :
+          "Grok Imagine で編集中..."
+        );
         formData.append("model", editModel);
         formData.append("resolution", editResolution);
-        if (editModel === "qwen") formData.append("provider", "qwen");
+        if (editModel === "qwen" || editModel === "seedream") formData.append("provider", editModel);
         const res = await fetch("/api/edit", { method: "POST", body: formData });
         const data = await parseJsonResponse(res);
         if (!res.ok || data.error) throw new Error(data.error ?? "編集に失敗しました");
@@ -3217,6 +3221,7 @@ export default function Home() {
                     {([
                       { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
                       { id: "qwen", label: "Qwen Image Edit 2.0", desc: "顔保持が得意" },
+                      { id: "seedream", label: "Seedream v5 Pro", desc: "顔維持・高精度編集" },
                       { id: "atlas", label: "Wan-2.6", desc: "画像編集特化" },
                     ] as { id: EditModel; label: string; desc: string }[]).map(m => (
                       <button
@@ -3234,7 +3239,9 @@ export default function Home() {
                       ? "接続先: atlascloud.ai / alibaba/wan-2.6/image-edit"
                       : editModel === "qwen"
                         ? "接続先: fal.ai / fal-ai/qwen-image-2/edit"
-                        : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
+                        : editModel === "seedream"
+                          ? "接続先: fal.ai / bytedance/seedream/v5/pro/edit"
+                          : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
                   </div>
                 </div>
 

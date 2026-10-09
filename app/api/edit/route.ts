@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 const FAL_KEY = process.env.FAL_API_KEY!;
 const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
 const QWEN_EDIT_MODEL = "fal-ai/qwen-image-2/edit";
+const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -301,7 +302,11 @@ export async function POST(req: NextRequest) {
     const prompt = String(formData.get("prompt") ?? "").trim();
     const resolution = String(formData.get("resolution") ?? "1k");
     const providerRaw = String(formData.get("provider") ?? "grok");
-    const provider = providerRaw === "openai" ? "openai" : providerRaw === "qwen" ? "qwen" : "grok";
+    const provider =
+      providerRaw === "openai" ? "openai" :
+      providerRaw === "qwen" ? "qwen" :
+      providerRaw === "seedream" ? "seedream" :
+      "grok";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -343,6 +348,10 @@ export async function POST(req: NextRequest) {
         ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
             num_images: 1,
             output_format: "jpeg",
+          })
+        : provider === "seedream"
+        ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
+            num_images: 1,
           })
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
             num_images: 1,
