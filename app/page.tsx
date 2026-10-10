@@ -257,7 +257,7 @@ export default function Home() {
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
-  const [faceswapAiModel, setFaceswapAiModel] = useState<"grok" | "qwen">("grok");
+  const [faceswapAiModel, setFaceswapAiModel] = useState<"grok" | "qwen" | "seedream">("grok");
   // analyze
   const [analyzeFile, setAnalyzeFile] = useState<File | null>(null);
   const [analyzeSrc, setAnalyzeSrc] = useState<string | null>(null);
@@ -1112,7 +1112,7 @@ export default function Home() {
       formData.append("file2", faceFile);
       formData.append("prompt", HEAD_SWAP_PROMPT);
       formData.append("resolution", "1k");
-      if (faceswapAiModel === "qwen") formData.append("provider", "qwen");
+      if (faceswapAiModel !== "grok") formData.append("provider", faceswapAiModel);
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
@@ -3547,7 +3547,8 @@ export default function Home() {
                       {([
                         { id: "grok", label: "Grok Imagine" },
                         { id: "qwen", label: "Qwen Image Edit 2.0" },
-                      ] as { id: "grok" | "qwen"; label: string }[]).map(m => (
+                        { id: "seedream", label: "Seedream v5 Pro" },
+                      ] as { id: "grok" | "qwen" | "seedream"; label: string }[]).map(m => (
                         <button
                           key={m.id}
                           onClick={() => setFaceswapAiModel(m.id)}
