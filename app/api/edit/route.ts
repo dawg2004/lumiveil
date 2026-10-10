@@ -348,7 +348,8 @@ export async function POST(req: NextRequest) {
         ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
             num_images: 1,
             output_format: "jpeg",
-          })
+          enable_safety_checker: false,
+        })
         : provider === "seedream"
         ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
             num_images: 1,
