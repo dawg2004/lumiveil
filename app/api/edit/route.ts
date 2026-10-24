@@ -350,8 +350,8 @@ export async function POST(req: NextRequest) {
         ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
             num_images: 1,
             output_format: "jpeg",
-          enable_safety_checker: false,
-        })
+            enable_safety_checker: false,
+          })
         : provider === "seedream"
         ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
             num_images: 1,
@@ -360,6 +360,7 @@ export async function POST(req: NextRequest) {
         ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fullPrompt, {
             num_images: 1,
             output_format: "jpeg",
+            safety_tolerance: "5",
           })
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
             num_images: 1,
