@@ -11,6 +11,7 @@ const FAL_KEY = process.env.FAL_API_KEY!;
 const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
 const QWEN_EDIT_MODEL = "fal-ai/qwen-image-2/edit";
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit";
+const FLUX_KONTEXT_EDIT_MODEL = "fal-ai/flux-pro/kontext/multi";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -306,6 +307,7 @@ export async function POST(req: NextRequest) {
       providerRaw === "openai" ? "openai" :
       providerRaw === "qwen" ? "qwen" :
       providerRaw === "seedream" ? "seedream" :
+      providerRaw === "flux" ? "flux" :
       "grok";
 
     if (!(file instanceof File)) {
@@ -353,6 +355,11 @@ export async function POST(req: NextRequest) {
         : provider === "seedream"
         ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
             num_images: 1,
+          })
+        : provider === "flux"
+        ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fullPrompt, {
+            num_images: 1,
+            output_format: "jpeg",
           })
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
             num_images: 1,
