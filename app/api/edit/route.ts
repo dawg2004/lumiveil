@@ -356,6 +356,7 @@ export async function POST(req: NextRequest) {
         : provider === "seedream"
         ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
             num_images: 1,
+            enable_safety_checker: false,
           })
         : provider === "flux"
         ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fluxPrompt, {
