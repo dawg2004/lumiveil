@@ -120,6 +120,11 @@ async function callFalEditModel(
   }
 
   const data = await response.json();
+  // FLUX 等は安全フィルターに掛かると真っ黒な画像を返し has_nsfw_concepts を true にする。
+  // 黒画像を保存・クレジット消費しないよう、ここでエラーにする。
+  if (Array.isArray(data.has_nsfw_concepts) && data.has_nsfw_concepts[0] === true) {
+    throw new Error(`${providerLabel}側の安全フィルターで編集できませんでした（黒い画像が返されました）。露出や性的表現を弱めるか、別のモデルで試してください。`);
+  }
   const falUrl = data.images?.[0]?.url;
   if (!falUrl) {
     throw new Error("URL not found");
