@@ -358,7 +358,7 @@ export async function POST(req: NextRequest) {
           })
         : provider === "flux"
         ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fullPrompt, {
-            num_images: 5,
+            num_images: 4,
             output_format: "jpeg",
             safety_tolerance: "5",
           })
