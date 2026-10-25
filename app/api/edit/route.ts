@@ -345,6 +345,7 @@ export async function POST(req: NextRequest) {
       }
 
       const fullPrompt = `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`;
+      const fluxPrompt = `Change the clothing according to this instruction: ${prompt}. Keep the person's face, identity, pose, and background as close as possible. Remove any watermarks.`;
 
       const result = provider === "qwen"
         ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
@@ -357,10 +358,12 @@ export async function POST(req: NextRequest) {
             num_images: 1,
           })
         : provider === "flux"
-        ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fullPrompt, {
+        ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fluxPrompt, {
             num_images: 4,
             output_format: "jpeg",
             safety_tolerance: "5",
+            guidance_scale: 8,
+            enhance_prompt: true,
           })
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
             num_images: 5,
