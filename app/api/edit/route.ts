@@ -309,6 +309,8 @@ export async function POST(req: NextRequest) {
       providerRaw === "seedream" ? "seedream" :
       providerRaw === "flux" ? "flux" :
       "grok";
+    // 顔ハメページの「AI生成で頭部合成」から呼ばれた場合は "headswap"
+    const mode = String(formData.get("mode") ?? "") === "headswap" ? "headswap" : "edit";
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "file is required" }, { status: 400 });
@@ -357,6 +359,14 @@ export async function POST(req: NextRequest) {
         ? await callFalEditModel(SEEDREAM_EDIT_MODEL, "Seedream", imageUrls, fullPrompt, {
             num_images: 1,
             enable_safety_checker: false,
+          })
+        : provider === "flux" && mode === "headswap"
+        ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, prompt, {
+            num_images: 1,
+            output_format: "jpeg",
+            safety_tolerance: "5",
+            guidance_scale: 3.5,
+            enhance_prompt: false,
           })
         : provider === "flux"
         ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, fluxPrompt, {
