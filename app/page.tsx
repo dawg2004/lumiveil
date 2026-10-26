@@ -257,7 +257,7 @@ export default function Home() {
   const [faceswapLoading, setFaceswapLoading] = useState(false);
   const [faceswapResult, setFaceswapResult] = useState<string | null>(null);
   const [faceswapStatus, setFaceswapStatus] = useState("");
-  const [faceswapAiModel, setFaceswapAiModel] = useState<"grok" | "qwen" | "seedream">("grok");
+  const [faceswapAiModel, setFaceswapAiModel] = useState<"grok" | "qwen" | "seedream" | "flux">("grok");
   // analyze
   const [analyzeFile, setAnalyzeFile] = useState<File | null>(null);
   const [analyzeSrc, setAnalyzeSrc] = useState<string | null>(null);
@@ -1104,7 +1104,7 @@ export default function Home() {
   const runHeadSwapComposite = useCallback(async () => {
     if (!faceFile || !targetFile) return;
     setFaceswapLoading(true);
-    setFaceswapStatus("頭部を合成中...");
+    setFaceswapStatus(faceswapAiModel === "flux" ? "FLUX.1 Kontext で頭部を合成中..." : "頭部を合成中...");
     setFaceswapResult(null);
     try {
       const token = await getAuthToken();
@@ -1114,6 +1114,7 @@ export default function Home() {
       formData.append("prompt", HEAD_SWAP_PROMPT);
       formData.append("resolution", "1k");
       if (faceswapAiModel !== "grok") formData.append("provider", faceswapAiModel);
+      formData.append("mode", "headswap");
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       const res = await fetch("/api/edit", { method: "POST", headers, body: formData });
@@ -3552,7 +3553,8 @@ export default function Home() {
                         { id: "grok", label: "Grok Imagine" },
                         { id: "qwen", label: "Qwen Image Edit 2.0" },
                         { id: "seedream", label: "Seedream v5 Pro" },
-                      ] as { id: "grok" | "qwen" | "seedream"; label: string }[]).map(m => (
+                        { id: "flux", label: "FLUX.1 Kontext" },
+                      ] as { id: "grok" | "qwen" | "seedream" | "flux"; label: string }[]).map(m => (
                         <button
                           key={m.id}
                           onClick={() => setFaceswapAiModel(m.id)}
@@ -3578,6 +3580,8 @@ export default function Home() {
                     <div style={{ marginTop: 6, fontSize: 11, color: "#6a6258" }}>
                       {faceswapAiModel === "qwen"
                         ? "Qwen Image Edit 2.0は髪型ごとの頭部合成には対応していません。顔のみの合成になります"
+                        : faceswapAiModel === "flux"
+                        ? "FLUX.1 Kontext [pro]（fal-ai/flux-pro/kontext/multi）で頭部（髪型込み）を再合成します。顔・体型の維持に強いモデルです"
                         : "生成AIで頭部（髪型込み）を丸ごと再合成します。仕上がりが顔ハメより変わる場合があります"}
                     </div>
                   </div>
