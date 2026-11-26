@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
+import sharp from "sharp";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { computeFlux2ImageSize, type Flux2ImageSize } from "@/lib/flux2-image-size";
 import { uploadBufferToStorage, uploadToStorage } from "@/lib/upload-to-storage";
 import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
@@ -12,8 +14,16 @@ const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
 const QWEN_EDIT_MODEL = "fal-ai/qwen-image-2/edit";
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit";
 const FLUX_KONTEXT_EDIT_MODEL = "fal-ai/flux-pro/kontext/multi";
-// ステップ生成の背景変更・背景合成用（安価・高速）。image_size 未指定で入力画像の縦横比を維持する。
-const FLUX2_EDIT_MODEL = "fal-ai/flux-2/edit";
+// ステップ生成の背景変更・背景合成用。クライアントからは provider 名だけ受け取り、モデル ID はここで固定する。
+const FLUX2_EDIT_MODELS = {
+  flux2: { id: "fal-ai/flux-2/edit", label: "FLUX.2" },
+  "flux2-turbo": { id: "fal-ai/flux-2/turbo/edit", label: "FLUX.2 turbo" },
+} as const;
+type Flux2Provider = keyof typeof FLUX2_EDIT_MODELS;
+
+function isFlux2Provider(value: string): value is Flux2Provider {
+  return value === "flux2" || value === "flux2-turbo";
+}
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
@@ -61,6 +71,19 @@ async function uploadToFal(file: File): Promise<string> {
   } catch {
     return fal.storage.upload(file);
   }
+}
+
+async function getPersonImageSize(file: File): Promise<Flux2ImageSize | null> {
+  try {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const meta = await sharp(buffer).rotate().metadata();
+    if (meta.width && meta.height) {
+      return computeFlux2ImageSize(meta.width, meta.height);
+    }
+  } catch (error) {
+    console.error("FLUX.2 image size detection failed", getErrorMessage(error));
+  }
+  return null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -315,7 +338,7 @@ export async function POST(req: NextRequest) {
       providerRaw === "qwen" ? "qwen" :
       providerRaw === "seedream" ? "seedream" :
       providerRaw === "flux" ? "flux" :
-      providerRaw === "flux2" ? "flux2" :
+      isFlux2Provider(providerRaw) ? providerRaw :
       "grok";
     // 顔ハメページの「AI生成で頭部合成」から呼ばれた場合は "headswap"
     const mode = String(formData.get("mode") ?? "") === "headswap" ? "headswap" : "edit";
@@ -356,6 +379,7 @@ export async function POST(req: NextRequest) {
 
       const fullPrompt = `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`;
       const fluxPrompt = `Change the clothing according to this instruction: ${prompt}. Keep the person's face, identity, pose, and background as close as possible. Remove any watermarks.`;
+      const flux2ImageSize = isFlux2Provider(provider) ? await getPersonImageSize(file) : null;
 
       const result = provider === "qwen"
         ? await callFalEditModel(QWEN_EDIT_MODEL, "Qwen Image", imageUrls, fullPrompt, {
@@ -368,11 +392,12 @@ export async function POST(req: NextRequest) {
             num_images: 1,
             enable_safety_checker: false,
           })
-        : provider === "flux2"
-        ? await callFalEditModel(FLUX2_EDIT_MODEL, "FLUX.2", imageUrls, fullPrompt, {
+        : isFlux2Provider(provider)
+        ? await callFalEditModel(FLUX2_EDIT_MODELS[provider].id, FLUX2_EDIT_MODELS[provider].label, imageUrls, fullPrompt, {
             num_images: 1,
             output_format: "jpeg",
             enable_safety_checker: false,
+            ...(flux2ImageSize ? { image_size: flux2ImageSize } : {}),
           })
         : provider === "flux" && mode === "headswap"
         ? await callFalEditModel(FLUX_KONTEXT_EDIT_MODEL, "FLUX Kontext", imageUrls, prompt, {
