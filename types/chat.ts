@@ -1,6 +1,7 @@
 export type ToolType =
   | "mosaic"
   | "background"
+  | "composite"
   | "beauty"
   | "brightness"
   | "pose"

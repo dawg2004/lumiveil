@@ -15,10 +15,11 @@ export function buildResponse(session: EditSession): ChatResponse {
         menu: [
           "1. モザイク処理",
           "2. 背景変更",
-          "3. 美肌補正",
-          "4. 明るさ調整",
-          "5. ポーズ変更",
-          "6. 自由入力で加工",
+          "3. 背景を合成",
+          "4. 美肌補正",
+          "5. 明るさ調整",
+          "6. ポーズ変更",
+          "7. 自由入力で加工",
         ],
         session,
       };

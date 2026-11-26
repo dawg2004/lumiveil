@@ -118,6 +118,7 @@ const MENU = {
   tools: [
     { label: "モザイク処理", tool: "mosaic" as ToolType, icon: "🎭" },
     { label: "背景変更", tool: "background" as ToolType, icon: "🖼️" },
+    { label: "背景を合成", tool: "composite" as ToolType, icon: "🧩" },
     { label: "美肌補正", tool: "beauty" as ToolType, icon: "✨" },
     { label: "明るさ調整", tool: "brightness" as ToolType, icon: "☀️" },
     { label: "ポーズ変更", tool: "pose" as ToolType, icon: "🧍" },
@@ -243,6 +244,9 @@ export default function StepGenerationFlow({
   const [flux2Quality, setFlux2Quality] = useState<Flux2Quality>("dev");
   const [lastTool, setLastTool] = useState<ToolType | null>(null);
   const [beforeStepFile, setBeforeStepFile] = useState<File | null>(null);
+  const [sourcePreviewUrl, setSourcePreviewUrl] = useState<string | null>(null);
+  const resultFileRef = useRef<File | null>(null);
+  const sourcePreviewUrlRef = useRef<string | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
   const [compareRatio, setCompareRatio] = useState(50);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -258,6 +262,14 @@ export default function StepGenerationFlow({
     } catch {
       // localStorage が使えない場合はデフォルトの dev のままにする
     }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (sourcePreviewUrlRef.current?.startsWith("blob:")) {
+        URL.revokeObjectURL(sourcePreviewUrlRef.current);
+      }
+    };
   }, []);
 
   const nextHistoryId = useCallback(() => {
@@ -323,6 +335,8 @@ export default function StepGenerationFlow({
     setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
 
     const imageUrl = URL.createObjectURL(file);
+    resultFileRef.current = null;
+    setWorkingPreviewUrl(imageUrl);
     pushTurn(userText, { userImage: imageUrl });
     try {
       await postChat({ event: "user_photo_uploaded", imageUrl });
@@ -451,11 +465,16 @@ export default function StepGenerationFlow({
     }
   }
 
-  async function refreshSourceFromResult(resultUrl: string) {
-    const response = await fetch(resultUrl);
-    const blob = await response.blob();
-    const file = new File([blob], "step-result.jpg", { type: blob.type || "image/jpeg" });
+  function setWorkingPreviewUrl(url: string) {
+    const previous = sourcePreviewUrlRef.current;
+    if (previous && previous.startsWith("blob:") && previous !== url) {
+      URL.revokeObjectURL(previous);
+    }
+    sourcePreviewUrlRef.current = url;
+    setSourcePreviewUrl(url);
+  }
 
+  async function applySourceFile(file: File, previewUrl?: string) {
     setSourceFile(file);
     setBeforeStepFile(file);
 
@@ -467,11 +486,30 @@ export default function StepGenerationFlow({
     const detected = await detectFaceOrFallback(file, imageSize);
     setDetectedFaceBox(detected);
     setFaceBox(regionBoxForScope(detected, mosaicScope, imageSize));
+
+    if (previewUrl) {
+      setWorkingPreviewUrl(previewUrl);
+    } else {
+      setWorkingPreviewUrl(URL.createObjectURL(file));
+    }
+  }
+
+  async function refreshSourceFromResult(resultUrl: string, localFile?: File | null) {
+    if (localFile) {
+      await applySourceFile(localFile, resultUrl);
+      return;
+    }
+
+    const response = await fetch(resultUrl);
+    const blob = await response.blob();
+    const file = new File([blob], "step-result.jpg", { type: blob.type || "image/jpeg" });
+    await applySourceFile(file, resultUrl);
   }
 
   async function runMosaic() {
     if (!sourceFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("mosaic");
     pushTurn(
@@ -534,7 +572,10 @@ export default function StepGenerationFlow({
       }
 
       const blob = await response.blob();
-      const resultImageUrl = URL.createObjectURL(blob);
+      const resultFile = new File([blob], "step-result.png", { type: blob.type || "image/png" });
+      resultFileRef.current = resultFile;
+      const storedUrl = response.headers.get("X-Result-Url");
+      const resultImageUrl = storedUrl || URL.createObjectURL(resultFile);
       await completeStep(resultImageUrl);
     } catch (error) {
       handleRunFailure(error);
@@ -546,6 +587,7 @@ export default function StepGenerationFlow({
   async function runBackgroundPreset(preset: BackgroundPreset, label: string) {
     if (!sourceFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("background");
     pushTurn(BACKGROUND_PRESET_LABELS[preset]);
@@ -564,8 +606,9 @@ export default function StepGenerationFlow({
   async function runBackgroundComposite() {
     if (!sourceFile || !backgroundFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
-    setLastTool("background");
+    setLastTool("composite");
     pushTurn(TEXT.go);
 
     try {
@@ -585,6 +628,7 @@ export default function StepGenerationFlow({
   async function runBeauty() {
     if (!sourceFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("beauty");
     pushTurn(`${labelFor(MENU.beautyModes, beautyMode)} で実行`);
@@ -603,6 +647,7 @@ export default function StepGenerationFlow({
   async function runBrightness() {
     if (!sourceFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("brightness");
     pushTurn(`${labelFor(MENU.brightnessModes, brightnessMode)} で実行`);
@@ -624,6 +669,7 @@ export default function StepGenerationFlow({
   async function runPose() {
     if (!sourceFile) return;
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("pose");
     pushTurn(`${labelFor(MENU.poseModes, poseMode)} で実行`);
@@ -648,6 +694,7 @@ export default function StepGenerationFlow({
       return;
     }
 
+    resultFileRef.current = null;
     setBeforeStepFile(sourceFile);
     setLastTool("custom");
     pushTurn(trimmedPrompt);
@@ -665,6 +712,7 @@ export default function StepGenerationFlow({
 
   function rerunLastTool() {
     if (lastTool === "mosaic") return runMosaic();
+    if (lastTool === "composite") return runBackgroundComposite();
     if (lastTool === "beauty") return runBeauty();
     if (lastTool === "brightness") return runBrightness();
     if (lastTool === "pose") return runPose();
@@ -672,27 +720,62 @@ export default function StepGenerationFlow({
     return Promise.resolve();
   }
 
+  async function syncSourceAfterContinue(resultUrl?: string) {
+    const localResult = resultFileRef.current;
+    resultFileRef.current = null;
+    if (localResult) {
+      await refreshSourceFromResult(resultUrl || URL.createObjectURL(localResult), localResult);
+      return;
+    }
+    if (resultUrl) {
+      await refreshSourceFromResult(resultUrl);
+    }
+  }
+
+  async function reopenLastToolMenu() {
+    if (lastTool === "composite" && backgroundFile) {
+      const backgroundImageUrl = URL.createObjectURL(backgroundFile);
+      await postChat({ event: "background_photo_uploaded", backgroundImageUrl });
+      return;
+    }
+    if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
+  }
+
   async function handleCompletedAdjust() {
     pushTurn(TEXT.completedMenu1, { botImage: chat.session.resultImageUrl });
-    if (beforeStepFile) setSourceFile(beforeStepFile);
-    if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
+    if (beforeStepFile) {
+      setSourceFile(beforeStepFile);
+      resultFileRef.current = null;
+    }
+    await reopenLastToolMenu();
   }
 
   async function handleCompletedRevise() {
     const resultUrl = chat.session.resultImageUrl;
-    if (!resultUrl) return;
+    if (!resultUrl && !resultFileRef.current) return;
     pushTurn(TEXT.completedMenu2, { botImage: resultUrl });
-    await postChat({ event: "continue_with_result" });
-    await refreshSourceFromResult(resultUrl);
-    if (lastTool) await postChat({ event: "tool_selected", tool: lastTool });
+    await syncSourceAfterContinue(resultUrl);
+    await postChat({ event: "continue_with_result", resultImageUrl: resultUrl });
+    if (lastTool) await reopenLastToolMenu();
     else await rerunLastTool();
   }
 
   async function handleCompletedContinue() {
     const resultUrl = chat.session.resultImageUrl;
     pushTurn(TEXT.completedMenu3, { botImage: resultUrl });
-    if (resultUrl) await refreshSourceFromResult(resultUrl);
-    await postChat({ event: "continue_with_result" });
+    await syncSourceAfterContinue(resultUrl);
+    const data = await postChat({ event: "continue_with_result", resultImageUrl: resultUrl });
+    const nextSourceUrl = data.session.sourceImageUrl || resultUrl || sourcePreviewUrlRef.current;
+    if (nextSourceUrl && data.session.sourceImageUrl !== nextSourceUrl) {
+      setChat((current) => ({
+        ...current,
+        session: {
+          ...current.session,
+          sourceImageUrl: nextSourceUrl,
+          resultImageUrl: current.session.resultImageUrl || resultUrl,
+        },
+      }));
+    }
   }
 
   function resetAllLocalState() {
@@ -704,6 +787,12 @@ export default function StepGenerationFlow({
     setBackgroundFile(null);
     setLastTool(null);
     setBeforeStepFile(null);
+    resultFileRef.current = null;
+    if (sourcePreviewUrlRef.current?.startsWith("blob:")) {
+      URL.revokeObjectURL(sourcePreviewUrlRef.current);
+    }
+    sourcePreviewUrlRef.current = null;
+    setSourcePreviewUrl(null);
     setCustomPrompt("");
     setHistory([]);
   }
@@ -733,7 +822,7 @@ export default function StepGenerationFlow({
       ...current,
       state: "photo_uploaded_menu",
       message: undefined,
-      menu: ["1. モザイク処理", "2. 背景変更", "3. 美肌補正", "4. 明るさ調整", "5. ポーズ変更", "6. 自由入力で加工"],
+      menu: ["1. モザイク処理", "2. 背景変更", "3. 背景を合成", "4. 美肌補正", "5. 明るさ調整", "6. ポーズ変更", "7. 自由入力で加工"],
       session: { ...current.session, step: "photo_uploaded_menu", selectedTool: undefined },
     }));
   }
@@ -876,13 +965,13 @@ export default function StepGenerationFlow({
                   <OptionGroup title="範囲" items={MENU.mosaicScopes} selected={mosaicScope} onSelect={(value) => handleScopeChange(value as MosaicScope)} />
                   <OptionGroup title="種類" items={MENU.mosaicStyles} selected={mosaicStyle} onSelect={(value) => setMosaicStyle(value as MosaicStyle)} />
                   <OptionGroup title="強度" items={MENU.mosaicStrengths} selected={mosaicStrength} onSelect={(value) => setMosaicStrength(value as MosaicStrength)} />
-                  {chat.session.sourceImageUrl && faceBox && sourceImageSize ? (
+                  {(sourcePreviewUrl || chat.session.sourceImageUrl) && faceBox && sourceImageSize ? (
                     <div className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
                       <SourcePreview
                         faceBox={faceBox}
                         imageSize={sourceImageSize}
                         onFaceBoxChange={setFaceBox}
-                        src={chat.session.sourceImageUrl}
+                        src={sourcePreviewUrl || chat.session.sourceImageUrl || ""}
                       />
                       <div className="border-t border-stone-800 px-3 py-3 text-xs text-stone-400">{TEXT.faceGuide}</div>
                       <div className="border-t border-stone-800 p-4">
