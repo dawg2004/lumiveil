@@ -8,6 +8,7 @@ import { uploadBufferToStorage, uploadToStorage } from "@/lib/upload-to-storage"
 import { evaluateTabAccess, getRequestIp } from "@/lib/access-control";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const FAL_KEY = process.env.FAL_API_KEY!;
 const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
@@ -26,6 +27,9 @@ function isFlux2Provider(value: string): value is Flux2Provider {
 }
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
+const SPICY_API_BASE = "https://api.spicyapi.ai";
+const SPICY_SEEDREAM_EDIT_MODEL = "bytedance/seedream-5.0-pro/edit";
+const SPICY_POLL_TIMEOUT_MS = 180_000;
 const HISTORY_PREFIX = "LUMIVEIL_HISTORY::";
 const FACE_PRESERVATION_PROMPT =
   "Identity lock: preserve the exact same person from the input image. Keep the face, facial structure, eyes, nose, mouth, jawline, expression, hairstyle, hairline, skin tone, age, and body proportions unchanged. Do not beautify, replace, redraw, stylize, retouch, or reinterpret the face. Edit only the requested non-identity details and keep the image photorealistic.";
@@ -163,6 +167,215 @@ async function callFalEditModel(
   }
 
   return { url, revisedPrompt: data.revised_prompt ?? "" };
+}
+
+type SpicyTaskAsset = {
+  url?: string;
+  unavailable?: boolean;
+};
+
+type SpicyTaskData = {
+  taskId?: string;
+  state?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  output?: {
+    assets?: SpicyTaskAsset[];
+  };
+};
+
+type SpicyEnvelope = {
+  code?: number;
+  msg?: string;
+  request_id?: string;
+  data?: SpicyTaskData;
+};
+
+function getSpicyErrorMessage(status: number, body: string, fallback: string) {
+  let message = fallback;
+
+  try {
+    const parsed = JSON.parse(body) as SpicyEnvelope;
+    if (parsed.data?.errorMessage) {
+      message = parsed.data.errorMessage;
+    } else if (parsed.msg && parsed.msg !== "success") {
+      message = parsed.msg;
+    }
+  } catch {
+    if (body.trim()) {
+      message = body;
+    }
+  }
+
+  const redacted = message.replace(/data:image\/[^"'\s]+/g, "[uploaded image]");
+  return `Spicy編集に失敗しました。(${status}) ${redacted.slice(0, 240)}`;
+}
+
+async function isMostlyBlackImage(buffer: Buffer): Promise<boolean> {
+  try {
+    const { data, info } = await sharp(buffer)
+      .rotate()
+      .resize(64, 64, { fit: "fill" })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const pixels = info.width * info.height;
+    if (pixels === 0) return false;
+
+    let dark = 0;
+    for (let i = 0; i < data.length; i += info.channels) {
+      if (data[i] < 8 && data[i + 1] < 8 && data[i + 2] < 8) {
+        dark += 1;
+      }
+    }
+    return dark / pixels >= 0.98;
+  } catch (error) {
+    console.error("Spicy black-image check failed", getErrorMessage(error));
+    return false;
+  }
+}
+
+async function uploadFilesForSpicy(files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+  for (const file of files) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const contentType = file.type || "image/jpeg";
+    urls.push(await uploadBufferToStorage(buffer, contentType, "image"));
+  }
+  return urls;
+}
+
+async function readSpicyTask(apiKey: string, taskId: string): Promise<{ data: SpicyTaskData; retryAfterMs?: number }> {
+  const response = await fetch(
+    `${SPICY_API_BASE}/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`,
+    { headers: { Authorization: `Bearer ${apiKey}` } }
+  );
+  const text = await response.text();
+
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get("retry-after") ?? "2");
+    return { data: {}, retryAfterMs: Math.max(1, retryAfter) * 1000 };
+  }
+
+  if (!response.ok) {
+    throw new Error(getSpicyErrorMessage(response.status, text, "タスクの確認に失敗しました。"));
+  }
+
+  const parsed = JSON.parse(text) as SpicyEnvelope;
+  if (!parsed.data) {
+    throw new Error(getSpicyErrorMessage(response.status, text, "タスク情報を取得できませんでした。"));
+  }
+  return { data: parsed.data };
+}
+
+async function waitForSpicyTask(apiKey: string, created: SpicyTaskData): Promise<SpicyTaskData> {
+  const taskId = created.taskId;
+  if (!taskId) {
+    throw new Error("Spicy編集に失敗しました。taskId が返りませんでした。");
+  }
+
+  const started = Date.now();
+  let wait = 2000;
+  let current = created;
+
+  while (current.state === "queued" || current.state === "running") {
+    if (Date.now() - started > SPICY_POLL_TIMEOUT_MS) {
+      throw new Error("Spicy編集が時間内に完了しませんでした。しばらくしてから再度お試しください。");
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    wait = Math.min(wait * 1.5, 15_000);
+
+    const result = await readSpicyTask(apiKey, taskId);
+    if (result.retryAfterMs) {
+      wait = result.retryAfterMs;
+      continue;
+    }
+    current = result.data;
+  }
+
+  return current;
+}
+
+async function callSpicySeedreamEdit(
+  apiKey: string,
+  files: File[],
+  prompt: string,
+  resolution: string
+): Promise<{ url: string; revisedPrompt: string }> {
+  const imageUrls = await uploadFilesForSpicy(files);
+  const spicyResolution = resolution === "2k" ? "2k" : "1k";
+
+  const response = await fetch(`${SPICY_API_BASE}/api/v1/jobs/createTask`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": crypto.randomUUID(),
+    },
+    body: JSON.stringify({
+      model: SPICY_SEEDREAM_EDIT_MODEL,
+      input: {
+        prompt,
+        image_urls: imageUrls,
+        aspect_ratio: "auto",
+        background: "opaque",
+        output_format: "jpeg",
+        resolution: spicyResolution,
+      },
+    }),
+  });
+
+  const text = await response.text();
+  let parsed: SpicyEnvelope;
+  try {
+    parsed = JSON.parse(text) as SpicyEnvelope;
+  } catch {
+    throw new Error(getSpicyErrorMessage(response.status, text, "タスクの作成に失敗しました。"));
+  }
+
+  if (response.status !== 202 && response.status !== 200) {
+    throw new Error(getSpicyErrorMessage(response.status, text, parsed.msg ?? "タスクの作成に失敗しました。"));
+  }
+  if (!parsed.data?.taskId) {
+    throw new Error(getSpicyErrorMessage(response.status, text, "taskId が返りませんでした。"));
+  }
+
+  const task = await waitForSpicyTask(apiKey, parsed.data);
+  if (task.state !== "succeeded") {
+    const detail = [task.errorCode, task.errorMessage].filter(Boolean).join(": ");
+    throw new Error(
+      detail
+        ? `Spicy編集に失敗しました。(${task.state}) ${detail}`
+        : `Spicy編集に失敗しました。(${task.state ?? "unknown"})`
+    );
+  }
+
+  const resultUrl = task.output?.assets?.find((asset) => asset.url && !asset.unavailable)?.url;
+  if (!resultUrl) {
+    throw new Error("Spicy編集の結果画像URLを取得できませんでした。");
+  }
+
+  const resultResponse = await fetch(resultUrl);
+  if (!resultResponse.ok) {
+    throw new Error(`Spicy編集の結果画像の取得に失敗しました。(${resultResponse.status})`);
+  }
+
+  const resultBuffer = Buffer.from(await resultResponse.arrayBuffer());
+  if (await isMostlyBlackImage(resultBuffer)) {
+    throw new Error("Spicy側の安全フィルターで編集できませんでした（黒い画像が返されました）。露出や性的表現を弱めるか、別のモデルで試してください。");
+  }
+
+  const contentType = resultResponse.headers.get("content-type") || "image/jpeg";
+  let url: string;
+  try {
+    url = await uploadBufferToStorage(resultBuffer, contentType, "image");
+  } catch (err) {
+    console.error("Spicy edit storage upload failed, using Spicy URL:", err);
+    url = resultUrl;
+  }
+
+  return { url, revisedPrompt: "" };
 }
 
 function getOpenAiEditError(status: number, body: string) {
@@ -335,6 +548,7 @@ export async function POST(req: NextRequest) {
     const providerRaw = String(formData.get("provider") ?? "grok");
     const provider =
       providerRaw === "openai" ? "openai" :
+      providerRaw === "spicy-seedream" ? "spicy-seedream" :
       providerRaw === "qwen" ? "qwen" :
       providerRaw === "seedream" ? "seedream" :
       providerRaw === "flux" ? "flux" :
@@ -358,14 +572,22 @@ export async function POST(req: NextRequest) {
     let url: string;
     let revisedPrompt = "";
 
+    const fullPrompt = `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`;
+
     if (provider === "openai") {
       const files = [file, ...(file2 instanceof File ? [file2] : [])];
-      const buffer = await callOpenAiEdit(
-        files,
-        `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`,
-        resolution
-      );
+      const buffer = await callOpenAiEdit(files, fullPrompt, resolution);
       url = await uploadBufferToStorage(buffer, "image/jpeg", "image");
+    } else if (provider === "spicy-seedream") {
+      const spicyKey = process.env.SPICY_API_KEY;
+      if (!spicyKey) {
+        return NextResponse.json({ error: "SPICY_API_KEY is not configured" }, { status: 500 });
+      }
+
+      const files = [file, ...(file2 instanceof File ? [file2] : [])];
+      const result = await callSpicySeedreamEdit(spicyKey, files, fullPrompt, resolution);
+      url = result.url;
+      revisedPrompt = result.revisedPrompt;
     } else {
       if (!FAL_KEY) {
         return NextResponse.json({ error: "FAL_API_KEY is not configured" }, { status: 500 });
@@ -377,7 +599,6 @@ export async function POST(req: NextRequest) {
         imageUrls.push(await uploadToFal(file2));
       }
 
-      const fullPrompt = `${FACE_PRESERVATION_PROMPT}\n${WATERMARK_REMOVAL_PROMPT}\n\n${prompt}`;
       const fluxPrompt = `Change the clothing according to this instruction: ${prompt}. Keep the person's face, identity, pose, and background as close as possible. Remove any watermarks.`;
       const flux2ImageSize = isFlux2Provider(provider) ? await getPersonImageSize(file) : null;
 
