@@ -815,20 +815,26 @@ export async function POST(req: NextRequest) {
     const adminClient = createAdminSupabaseClient();
     const nextCredits = await decrementCredits(adminClient, shop.id, currentCredits);
 
+    let resultUrl: string | undefined;
     try {
-      const url = await uploadBufferToStorage(output, "image/png", "image");
-      await saveMosaicHistory(adminClient, shop.id, url);
+      resultUrl = await uploadBufferToStorage(output, "image/png", "image");
+      await saveMosaicHistory(adminClient, shop.id, resultUrl);
     } catch (err) {
       console.error("mosaic history save failed, continuing:", err);
     }
 
-    return new NextResponse(new Uint8Array(output), {
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "no-store",
-        "X-Credits-Remaining": String(nextCredits),
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": "image/png",
+      "Cache-Control": "no-store",
+      "X-Credits-Remaining": String(nextCredits),
+    };
+    if (resultUrl) {
+      // 既存のモザイクタブは画像バイナリを使うため、本体のレスポンス形式は変えず
+      // ステップ生成側が連鎖できるように URL だけヘッダーで返す。
+      headers["X-Result-Url"] = resultUrl;
+    }
+
+    return new NextResponse(new Uint8Array(output), { headers });
   } catch (error) {
     console.error("mosaic route failed", error);
     return NextResponse.json({ error: "mosaic failed" }, { status: 500 });

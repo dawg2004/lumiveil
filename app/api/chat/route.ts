@@ -13,7 +13,22 @@ import {
 import type { ChatRequest, EditSession } from "@/types/chat";
 
 function ensureSession(sessionId?: string): EditSession {
-  return getSession(sessionId) ?? createSession();
+  const existing = getSession(sessionId);
+  if (existing) return existing;
+
+  // サーバーレス環境ではメモリ上のセッションが消えることがある。
+  // その場合もクライアントから渡された sessionId を維持して再構築する。
+  if (sessionId) {
+    const session: EditSession = {
+      sessionId,
+      step: "waiting_user_photo",
+      options: {},
+    };
+    saveSession(session);
+    return session;
+  }
+
+  return createSession();
 }
 
 function createBearerSupabaseClient(token: string) {
@@ -94,6 +109,7 @@ export async function POST(req: NextRequest) {
 
       if (body.tool === "mosaic") session.step = "mosaic_menu";
       if (body.tool === "background") session.step = "background_menu";
+      if (body.tool === "composite") session.step = "waiting_background_photo";
       if (body.tool === "beauty") session.step = "beauty_menu";
       if (body.tool === "brightness") session.step = "brightness_menu";
       if (body.tool === "pose") session.step = "pose_menu";
@@ -134,8 +150,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(buildResponse(session));
 
     case "continue_with_result":
-      if (session.resultImageUrl) {
-        session.sourceImageUrl = session.resultImageUrl;
+      {
+        const resultUrl = body.resultImageUrl ?? session.resultImageUrl;
+        if (resultUrl) {
+          session.resultImageUrl = resultUrl;
+          session.sourceImageUrl = resultUrl;
+        }
       }
       session.backgroundImageUrl = undefined;
       session.selectedTool = undefined;
