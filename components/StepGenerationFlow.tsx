@@ -20,6 +20,9 @@ import {
 } from "@/lib/background-prompts";
 import type { AppStep, ChatResponse, ToolType } from "@/types/chat";
 
+type Flux2Quality = "dev" | "turbo";
+const FLUX2_QUALITY_STORAGE_KEY = "lumiveil.step.flux2Quality";
+
 type HistoryEntry = {
   id: string;
   role: "bot" | "user";
@@ -82,6 +85,9 @@ const TEXT = {
   processHotel: "ホテルラウンジ風へ背景変更中...",
   processPark: "公園背景へ変更中...",
   processLuxury: "室内ラグジュアリー風へ背景変更中...",
+  flux2QualityTitle: "背景の生成モデル",
+  flux2QualityDev: "高画質（dev）",
+  flux2QualityTurbo: "高速・格安（turbo）",
   mosaicError: "モザイク処理に失敗しました。",
   editError: "処理に失敗しました。",
   chatError: "チャット状態の更新に失敗しました。",
@@ -234,6 +240,7 @@ export default function StepGenerationFlow({
   const [poseMode, setPoseMode] = useState<PoseMode>("elegant");
   const [customPrompt, setCustomPrompt] = useState("");
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
+  const [flux2Quality, setFlux2Quality] = useState<Flux2Quality>("dev");
   const [lastTool, setLastTool] = useState<ToolType | null>(null);
   const [beforeStepFile, setBeforeStepFile] = useState<File | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
@@ -241,6 +248,17 @@ export default function StepGenerationFlow({
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const historyIdRef = useRef(0);
   const feedRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(FLUX2_QUALITY_STORAGE_KEY);
+      if (stored === "dev" || stored === "turbo") {
+        setFlux2Quality(stored);
+      }
+    } catch {
+      // localStorage が使えない場合はデフォルトの dev のままにする
+    }
+  }, []);
 
   const nextHistoryId = useCallback(() => {
     historyIdRef.current += 1;
@@ -377,11 +395,24 @@ export default function StepGenerationFlow({
     showRecovery();
   }
 
+  function backgroundProvider(): "flux2" | "flux2-turbo" {
+    return flux2Quality === "turbo" ? "flux2-turbo" : "flux2";
+  }
+
+  function selectFlux2Quality(value: Flux2Quality) {
+    setFlux2Quality(value);
+    try {
+      window.localStorage.setItem(FLUX2_QUALITY_STORAGE_KEY, value);
+    } catch {
+      // ignore
+    }
+  }
+
   function buildEditFormData(
     file: File,
     prompt: string,
     file2?: File,
-    provider: "openai" | "flux2" = "openai"
+    provider: "openai" | "flux2" | "flux2-turbo" = "openai"
   ) {
     const formData = new FormData();
     formData.set("file", file);
@@ -521,7 +552,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset], undefined, "flux2"), label);
+      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset], undefined, backgroundProvider()), label);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -540,7 +571,7 @@ export default function StepGenerationFlow({
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile, "flux2"),
+        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile, backgroundProvider()),
         TEXT.processBackground
       );
       await completeStep(url);
@@ -888,6 +919,7 @@ export default function StepGenerationFlow({
 
               {chat.state === "background_menu" ? (
                 <div className="grid gap-3">
+                  <Flux2QualityToggle selected={flux2Quality} onSelect={selectFlux2Quality} />
                   <ActionButton label="フォトスタジオ風" onClick={() => void runBackgroundPreset("studio", TEXT.processStudio)} />
                   <ActionButton label="ホテルラウンジ風" onClick={() => void runBackgroundPreset("hotel", TEXT.processHotel)} />
                   <ActionButton label="公園" onClick={() => void runBackgroundPreset("park", TEXT.processPark)} />
@@ -911,20 +943,26 @@ export default function StepGenerationFlow({
               ) : null}
 
               {chat.state === "waiting_background_photo" ? (
-                <UploadCard label={TEXT.backgroundPhoto} accept="image/*" onChange={handleBackgroundImageChange} />
+                <div className="grid gap-3">
+                  <Flux2QualityToggle selected={flux2Quality} onSelect={selectFlux2Quality} />
+                  <UploadCard label={TEXT.backgroundPhoto} accept="image/*" onChange={handleBackgroundImageChange} />
+                </div>
               ) : null}
 
               {chat.state === "waiting_background_confirm" ? (
-                <div className="flex flex-wrap gap-3">
-                  <ActionButton label={TEXT.go} onClick={() => void runBackgroundComposite()} />
-                  <ActionButton
-                    label={TEXT.revise}
-                    onClick={() => {
-                      pushTurn(TEXT.revise);
-                      void postChat({ event: "tool_selected", tool: "background" });
-                    }}
-                    muted
-                  />
+                <div className="grid gap-3">
+                  <Flux2QualityToggle selected={flux2Quality} onSelect={selectFlux2Quality} />
+                  <div className="flex flex-wrap gap-3">
+                    <ActionButton label={TEXT.go} onClick={() => void runBackgroundComposite()} />
+                    <ActionButton
+                      label={TEXT.revise}
+                      onClick={() => {
+                        pushTurn(TEXT.revise);
+                        void postChat({ event: "tool_selected", tool: "background" });
+                      }}
+                      muted
+                    />
+                  </div>
                 </div>
               ) : null}
 
@@ -1219,6 +1257,45 @@ function UploadCard({
       <span className="mt-2 text-xs text-stone-400">{disabled ? TEXT.backgroundUploadHint : TEXT.imageSelectHint}</span>
       <input accept={accept} className="hidden" disabled={disabled} onChange={onChange} type="file" />
     </label>
+  );
+}
+
+function Flux2QualityToggle({
+  selected,
+  onSelect,
+}: {
+  selected: Flux2Quality;
+  onSelect: (value: Flux2Quality) => void;
+}) {
+  const items: Array<{ label: string; value: Flux2Quality }> = [
+    { label: TEXT.flux2QualityDev, value: "dev" },
+    { label: TEXT.flux2QualityTurbo, value: "turbo" },
+  ];
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-stone-300">{TEXT.flux2QualityTitle}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {items.map((item) => {
+          const active = item.value === selected;
+          return (
+            <button
+              className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-3 text-left text-sm transition ${
+                active
+                  ? "border-[#c9a84c] bg-[#ddc37e] text-stone-950 shadow-[0_6px_18px_-8px_rgba(201,168,76,0.6)]"
+                  : "border-stone-700 bg-stone-950 text-stone-100 hover:border-[#c9a84c]/60 hover:bg-stone-900"
+              }`}
+              key={item.value}
+              onClick={() => onSelect(item.value)}
+              type="button"
+            >
+              <span>{item.label}</span>
+              {active ? <span className="text-xs">✓</span> : null}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
