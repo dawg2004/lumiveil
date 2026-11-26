@@ -20,6 +20,7 @@ export function buildResponse(session: EditSession): ChatResponse {
           "5. 明るさ調整",
           "6. ポーズ変更",
           "7. 自由入力で加工",
+          "8. Spicy",
         ],
         session,
       };
@@ -107,6 +108,13 @@ export function buildResponse(session: EditSession): ChatResponse {
       return {
         state: session.step,
         message: "実行したい加工内容を自由に入力してください。",
+        session,
+      };
+
+    case "spicy_menu":
+      return {
+        state: session.step,
+        message: "Spicy（Seedream 5.0 Pro）で編集したい内容を入力してください。",
         session,
       };
 

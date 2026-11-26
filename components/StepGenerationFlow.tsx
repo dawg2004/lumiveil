@@ -72,8 +72,11 @@ const TEXT = {
   runBrightness: "明るさ調整を実行",
   runPose: "ポーズ変更を実行",
   runCustom: "この内容で実行",
+  runSpicy: "Spicy で実行",
   customPromptPlaceholder: "例: 背景を夜景に変えて、笑顔にしてください",
+  spicyPromptPlaceholder: "例: 衣装を赤いドレスに変えて、夜の街並みを背景にしてください",
   customPromptRequired: "実行したい内容を入力してください。",
+  spicyPromptRequired: "Spicy で実行したい内容を入力してください。",
   processMosaic: "モザイク処理中...",
   detectFace: "顔を検出中...",
   processBackground: "背景を自然に合成中...",
@@ -81,6 +84,7 @@ const TEXT = {
   processBrightness: "明るさを調整中...",
   processPose: "ポーズを整えています...",
   processCustom: "生成中...",
+  processSpicy: "Spicy で生成中...",
   processStudio: "フォトスタジオ風へ背景変更中...",
   processHotel: "ホテルラウンジ風へ背景変更中...",
   processPark: "公園背景へ変更中...",
@@ -123,6 +127,7 @@ const MENU = {
     { label: "明るさ調整", tool: "brightness" as ToolType, icon: "☀️" },
     { label: "ポーズ変更", tool: "pose" as ToolType, icon: "🧍" },
     { label: "自由入力で加工", tool: "custom" as ToolType, icon: "✏️" },
+    { label: "Spicy", tool: "spicy" as ToolType, icon: "🌶️" },
   ],
   mosaicScopes: [
     { label: "顔全体", value: "face" as MosaicScope },
@@ -207,6 +212,7 @@ const STATE_PROMPTS: Partial<Record<AppStep, string>> = {
   brightness_menu: "明るさの調整方法を選んでください。",
   pose_menu: "ポーズを選んでください。",
   custom_menu: "実行したい加工内容を自由に入力してください。",
+  spicy_menu: "Spicy（Seedream 5.0 Pro）で編集したい内容を入力してください。",
   completed: "仕上がりはいかがですか？",
 };
 
@@ -240,6 +246,7 @@ export default function StepGenerationFlow({
   const [brightnessMode, setBrightnessMode] = useState<BrightnessMode>("natural");
   const [poseMode, setPoseMode] = useState<PoseMode>("elegant");
   const [customPrompt, setCustomPrompt] = useState("");
+  const [spicyPrompt, setSpicyPrompt] = useState("");
   const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
   const [flux2Quality, setFlux2Quality] = useState<Flux2Quality>("dev");
   const [lastTool, setLastTool] = useState<ToolType | null>(null);
@@ -426,7 +433,7 @@ export default function StepGenerationFlow({
     file: File,
     prompt: string,
     file2?: File,
-    provider: "openai" | "flux2" | "flux2-turbo" = "openai"
+    provider: "openai" | "flux2" | "flux2-turbo" | "spicy-seedream" = "openai"
   ) {
     const formData = new FormData();
     formData.set("file", file);
@@ -437,10 +444,10 @@ export default function StepGenerationFlow({
     return formData;
   }
 
-  async function runEditRequest(formData: FormData, label: string): Promise<string> {
+  async function runEditRequest(formData: FormData, label: string, timeoutMs = 75_000): Promise<string> {
     setBusyLabel(label);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 75000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch("/api/edit", {
@@ -710,6 +717,35 @@ export default function StepGenerationFlow({
     }
   }
 
+  async function runSpicy() {
+    if (!sourceFile) return;
+
+    const trimmedPrompt = spicyPrompt.trim();
+    if (!trimmedPrompt) {
+      window.alert(TEXT.spicyPromptRequired);
+      return;
+    }
+
+    resultFileRef.current = null;
+    setBeforeStepFile(sourceFile);
+    setLastTool("spicy");
+    pushTurn(trimmedPrompt);
+
+    try {
+      await postChat({ event: "confirm_go" });
+      const url = await runEditRequest(
+        buildEditFormData(sourceFile, trimmedPrompt, undefined, "spicy-seedream"),
+        TEXT.processSpicy,
+        210_000
+      );
+      await completeStep(url);
+    } catch (error) {
+      handleRunFailure(error);
+    } finally {
+      setBusyLabel(null);
+    }
+  }
+
   function rerunLastTool() {
     if (lastTool === "mosaic") return runMosaic();
     if (lastTool === "composite") return runBackgroundComposite();
@@ -717,6 +753,7 @@ export default function StepGenerationFlow({
     if (lastTool === "brightness") return runBrightness();
     if (lastTool === "pose") return runPose();
     if (lastTool === "custom") return runCustom();
+    if (lastTool === "spicy") return runSpicy();
     return Promise.resolve();
   }
 
@@ -794,6 +831,7 @@ export default function StepGenerationFlow({
     sourcePreviewUrlRef.current = null;
     setSourcePreviewUrl(null);
     setCustomPrompt("");
+    setSpicyPrompt("");
     setHistory([]);
   }
 
@@ -822,7 +860,7 @@ export default function StepGenerationFlow({
       ...current,
       state: "photo_uploaded_menu",
       message: undefined,
-      menu: ["1. モザイク処理", "2. 背景変更", "3. 背景を合成", "4. 美肌補正", "5. 明るさ調整", "6. ポーズ変更", "7. 自由入力で加工"],
+      menu: ["1. モザイク処理", "2. 背景変更", "3. 背景を合成", "4. 美肌補正", "5. 明るさ調整", "6. ポーズ変更", "7. 自由入力で加工", "8. Spicy"],
       session: { ...current.session, step: "photo_uploaded_menu", selectedTool: undefined },
     }));
   }
@@ -1084,6 +1122,17 @@ export default function StepGenerationFlow({
                     value={customPrompt}
                   />
                   <ActionButton label={TEXT.runCustom} onClick={() => void runCustom()} />
+                </div>
+              ) : null}
+
+              {chat.state === "spicy_menu" ? (
+                <div className="space-y-3">
+                  <PromptTextarea
+                    onChange={setSpicyPrompt}
+                    placeholder={TEXT.spicyPromptPlaceholder}
+                    value={spicyPrompt}
+                  />
+                  <ActionButton label={TEXT.runSpicy} onClick={() => void runSpicy()} />
                 </div>
               ) : null}
 
