@@ -377,12 +377,17 @@ export default function StepGenerationFlow({
     showRecovery();
   }
 
-  function buildEditFormData(file: File, prompt: string, file2?: File) {
+  function buildEditFormData(
+    file: File,
+    prompt: string,
+    file2?: File,
+    provider: "openai" | "flux2" = "openai"
+  ) {
     const formData = new FormData();
     formData.set("file", file);
     formData.set("prompt", prompt);
     formData.set("resolution", "1k");
-    formData.set("provider", "openai");
+    formData.set("provider", provider);
     if (file2) formData.set("file2", file2);
     return formData;
   }
@@ -516,7 +521,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset]), label);
+      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset], undefined, "flux2"), label);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -535,7 +540,7 @@ export default function StepGenerationFlow({
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile),
+        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile, "flux2"),
         TEXT.processBackground
       );
       await completeStep(url);
