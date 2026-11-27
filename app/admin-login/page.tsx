@@ -11,6 +11,7 @@ export default function AdminLoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
 
@@ -83,21 +84,46 @@ export default function AdminLoginPage() {
 
           <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12, fontWeight: 600 }}>
             管理画面パスワード
-            <input
-              type="password"
-              value={password}
-              onChange={event => setPassword(event.target.value)}
-              placeholder="パスワードを入力"
-              style={{
-                width: "100%",
-                borderRadius: 10,
-                border: "1px solid #a89e8e",
-                background: "#f5f1e7",
-                color: "#111",
-                padding: "12px 14px",
-                fontSize: 14,
-              }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                placeholder="パスワードを入力"
+                style={{
+                  width: "100%",
+                  borderRadius: 10,
+                  border: "1px solid #a89e8e",
+                  background: "#f5f1e7",
+                  color: "#111",
+                  padding: "12px 76px 12px 14px",
+                  fontSize: 14,
+                  boxSizing: "border-box",
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(current => !current)}
+                aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+                style={{
+                  position: "absolute",
+                  right: 8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  padding: "6px 9px",
+                  borderRadius: 7,
+                  border: "1px solid #a89e8e",
+                  background: showPassword ? "#c9a84c" : "rgba(255,255,255,0.45)",
+                  color: showPassword ? "#0a0e1a" : "#4e4a43",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                {showPassword ? "隠す" : "表示"}
+              </button>
+            </div>
           </label>
 
           <button
