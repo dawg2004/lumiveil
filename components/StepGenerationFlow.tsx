@@ -18,6 +18,11 @@ import {
   BACKGROUND_PROMPTS,
   type BackgroundPreset,
 } from "@/lib/background-prompts";
+import {
+  PAIR_UPLOAD_BUDGET_BYTES,
+  prepareImageForUpload,
+  SINGLE_UPLOAD_BUDGET_BYTES,
+} from "@/lib/prepare-upload-image";
 import type { AppStep, ChatResponse, ToolType } from "@/types/chat";
 
 type Flux2Quality = "dev" | "turbo";
@@ -93,6 +98,7 @@ const TEXT = {
   flux2QualityDev: "高画質（dev）",
   flux2QualityTurbo: "高速・格安（turbo）",
   mosaicError: "モザイク処理に失敗しました。",
+  payloadTooLarge: "画像のファイルサイズが大きすぎて送信できませんでした。写真を小さくしてからもう一度お試しください。",
   editError: "処理に失敗しました。",
   chatError: "チャット状態の更新に失敗しました。",
   recoveryTitle: "生成が止まっている可能性があります。",
@@ -429,22 +435,26 @@ export default function StepGenerationFlow({
     }
   }
 
-  function buildEditFormData(
+  async function buildEditFormData(
     file: File,
     prompt: string,
     file2?: File,
     provider: "openai" | "flux2" | "flux2-turbo" | "spicy-seedream" = "openai"
   ) {
+    // Vercel の本文上限（約 4.5MB）を超えないよう、送信前に圧縮する。
+    // 特にモザイク結果はフル解像度 PNG なので、そのままだと必ず超える。
+    const budget = file2 ? PAIR_UPLOAD_BUDGET_BYTES : SINGLE_UPLOAD_BUDGET_BYTES;
+    const prepared = await prepareImageForUpload(file, budget);
     const formData = new FormData();
-    formData.set("file", file);
+    formData.set("file", prepared.file);
     formData.set("prompt", prompt);
     formData.set("resolution", "1k");
     formData.set("provider", provider);
-    if (file2) formData.set("file2", file2);
+    if (file2) formData.set("file2", (await prepareImageForUpload(file2, budget)).file);
     return formData;
   }
 
-  async function runEditRequest(formData: FormData, label: string, timeoutMs = 75_000): Promise<string> {
+  async function runEditRequest(formData: FormData, label: string, timeoutMs = 180_000): Promise<string> {
     setBusyLabel(label);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -457,6 +467,7 @@ export default function StepGenerationFlow({
       });
 
       if (!response.ok) {
+        if (response.status === 413) throw new Error(TEXT.payloadTooLarge);
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error ?? TEXT.editError);
       }
@@ -549,15 +560,18 @@ export default function StepGenerationFlow({
         mosaic: "モザイク",
       };
 
+      // 前のモザイク結果（フル解像度 PNG）を続けて使う場合などに備えて圧縮する。
+      // 縮小した場合は枠の座標も同じ比率で合わせる。
+      const prepared = await prepareImageForUpload(sourceFile);
       const formData = new FormData();
-      formData.set("file", sourceFile);
+      formData.set("file", prepared.file);
       formData.set("scope", mosaicScope);
       formData.set("mode", modeMap[mosaicStyle]);
       formData.set("strength", String(mosaicStrength));
-      formData.set("x", String(activeFaceBox.x));
-      formData.set("y", String(activeFaceBox.y));
-      formData.set("width", String(activeFaceBox.width));
-      formData.set("height", String(activeFaceBox.height));
+      formData.set("x", String(Math.round(activeFaceBox.x * prepared.scale)));
+      formData.set("y", String(Math.round(activeFaceBox.y * prepared.scale)));
+      formData.set("width", String(Math.round(activeFaceBox.width * prepared.scale)));
+      formData.set("height", String(Math.round(activeFaceBox.height * prepared.scale)));
       formData.set("boxMode", "region");
 
       const controller = new AbortController();
@@ -574,6 +588,7 @@ export default function StepGenerationFlow({
       }
 
       if (!response.ok) {
+        if (response.status === 413) throw new Error(TEXT.payloadTooLarge);
         const data = await response.json().catch(() => ({}));
         throw new Error(data.error ?? TEXT.mosaicError);
       }
@@ -601,7 +616,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset], undefined, backgroundProvider()), label);
+      const url = await runEditRequest(await buildEditFormData(sourceFile, BACKGROUND_PROMPTS[preset], undefined, backgroundProvider()), label);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -621,7 +636,7 @@ export default function StepGenerationFlow({
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile, backgroundProvider()),
+        await buildEditFormData(sourceFile, BACKGROUND_COMPOSITE_PROMPT, backgroundFile, backgroundProvider()),
         TEXT.processBackground
       );
       await completeStep(url);
@@ -642,7 +657,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, BEAUTY_PROMPTS[beautyMode]), TEXT.processBeauty);
+      const url = await runEditRequest(await buildEditFormData(sourceFile, BEAUTY_PROMPTS[beautyMode]), TEXT.processBeauty);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -662,7 +677,7 @@ export default function StepGenerationFlow({
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, BRIGHTNESS_PROMPTS[brightnessMode]),
+        await buildEditFormData(sourceFile, BRIGHTNESS_PROMPTS[brightnessMode]),
         TEXT.processBrightness
       );
       await completeStep(url);
@@ -683,7 +698,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, POSE_PROMPTS[poseMode]), TEXT.processPose);
+      const url = await runEditRequest(await buildEditFormData(sourceFile, POSE_PROMPTS[poseMode]), TEXT.processPose);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -708,7 +723,7 @@ export default function StepGenerationFlow({
 
     try {
       await postChat({ event: "confirm_go" });
-      const url = await runEditRequest(buildEditFormData(sourceFile, trimmedPrompt), TEXT.processCustom);
+      const url = await runEditRequest(await buildEditFormData(sourceFile, trimmedPrompt), TEXT.processCustom);
       await completeStep(url);
     } catch (error) {
       handleRunFailure(error);
@@ -734,7 +749,7 @@ export default function StepGenerationFlow({
     try {
       await postChat({ event: "confirm_go" });
       const url = await runEditRequest(
-        buildEditFormData(sourceFile, trimmedPrompt, undefined, "spicy-seedream"),
+        await buildEditFormData(sourceFile, trimmedPrompt, undefined, "spicy-seedream"),
         TEXT.processSpicy,
         210_000
       );
