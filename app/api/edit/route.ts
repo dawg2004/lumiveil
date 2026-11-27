@@ -11,7 +11,12 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const FAL_KEY = process.env.FAL_API_KEY!;
-const GROK_EDIT_MODEL = "xai/grok-imagine-image/quality/edit";
+const GROK_EDIT_MODEL = "xai/grok-imagine-image/v2.0/edit";
+const GROK_V20_RESOLUTIONS = new Set(["1k", "1.5k", "2k"]);
+
+function toGrokImagineV20Resolution(resolution: string): "1k" | "1.5k" | "2k" {
+  return GROK_V20_RESOLUTIONS.has(resolution) ? (resolution as "1k" | "1.5k" | "2k") : "1k";
+}
 const QWEN_EDIT_MODEL = "fal-ai/qwen-image-2/edit";
 const SEEDREAM_EDIT_MODEL = "bytedance/seedream/v5/pro/edit";
 const FLUX_KONTEXT_EDIT_MODEL = "fal-ai/flux-pro/kontext/multi";
@@ -650,8 +655,10 @@ export async function POST(req: NextRequest) {
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
             num_images: 1,
             aspect_ratio: "auto",
-            resolution,
+            resolution: toGrokImagineV20Resolution(resolution),
             output_format: "jpeg",
+            quality: "auto",
+            enable_safety_checker: false,
           });
 
       url = result.url;

@@ -1908,7 +1908,7 @@ export default function Home() {
                     ))}
                   </div>
                   <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
-                    接続先: {bgModel === "qwen" ? "fal.ai / fal-ai/qwen-image-2/edit" : "fal.ai / xai/grok-imagine-image/quality/edit"}・料金目安: 1クレジット
+                    接続先: {bgModel === "qwen" ? "fal.ai / fal-ai/qwen-image-2/edit" : "fal.ai / xai/grok-imagine-image/v2.0/edit"}・料金目安: 1クレジット
                   </div>
                 </div>
 
@@ -3246,7 +3246,7 @@ export default function Home() {
                           ? "接続先: fal.ai / bytedance/seedream/v5/pro/edit"
                           : editModel === "flux"
                             ? "接続先: fal.ai / fal-ai/flux-pro/kontext/multi"
-                            : "接続先: fal.ai / xai/grok-imagine-image/quality/edit"}
+                            : "接続先: fal.ai / xai/grok-imagine-image/v2.0/edit"}
                   </div>
                 </div>
 
@@ -3296,7 +3296,7 @@ export default function Home() {
                       ))}
                     </div>
                     <div style={{ marginTop: 8, fontSize: 11, color: "#6a6258" }}>
-                      料金目安: {priceToCredits(editResolution === "1k" ? 0.06 : 0.08)}クレジット。顔保持指定は入れていますが、顔固定専用モデルではありません。
+                      料金目安: {priceToCredits(editResolution === "1k" ? 0.07 : 0.09)}クレジット。顔保持指定は入れていますが、顔固定専用モデルではありません。
                     </div>
                   </div>
                 )}
