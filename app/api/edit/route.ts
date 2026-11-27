@@ -27,6 +27,7 @@ function isFlux2Provider(value: string): value is Flux2Provider {
 }
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_EDIT_MODEL = "gpt-image-1.5";
+const OPENAI_EDIT_TIMEOUT_MS = 165_000;
 const SPICY_API_BASE = "https://api.spicyapi.ai";
 const SPICY_SEEDREAM_EDIT_MODEL = "bytedance/seedream-5.0-pro/edit";
 const SPICY_POLL_TIMEOUT_MS = 180_000;
@@ -418,13 +419,23 @@ async function callOpenAiEdit(files: File[], prompt: string, resolution: string)
     formData.append("image[]", file);
   }
 
-  const response = await fetch("https://api.openai.com/v1/images/edits", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: formData,
+      // クライアント側の待ち時間（180秒）より先に切り、JSON のエラーとして返す
+      signal: AbortSignal.timeout(OPENAI_EDIT_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new Error("GPT Imageの応答が時間内に返ってきませんでした。少し時間をおいてもう一度お試しください。");
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const text = await response.text();
