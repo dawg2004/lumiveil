@@ -1873,7 +1873,7 @@ export default function Home() {
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
                     {([
-                      { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
+                      { id: "grok", label: "Grok Imagine 2.0", desc: "高品質・高速" },
                       { id: "qwen", label: "Qwen Image Edit 2.0", desc: "顔保持が得意" },
                     ] as { id: "grok" | "qwen"; label: string; desc: string }[]).map(m => (
                       <button
@@ -3221,7 +3221,7 @@ export default function Home() {
                   <div style={sectionLabelStyle}>モデル</div>
                   <div style={buttonRowStyle}>
                     {([
-                      { id: "grok", label: "Grok Imagine", desc: "高品質・高速" },
+                      { id: "grok", label: "Grok Imagine 2.0", desc: "高品質・高速" },
                       { id: "qwen", label: "Qwen Image Edit 2.0", desc: "顔保持が得意" },
                       { id: "seedream", label: "Seedream v5 Pro", desc: "顔維持・高精度編集" },
                       { id: "flux", label: "FLUX.1 Kontext", desc: "顔・体型維持に強い" },
@@ -3550,7 +3550,7 @@ export default function Home() {
                     <div style={{ ...sectionLabelStyle, marginBottom: 8 }}>AI生成で頭部合成（髪型ごと）</div>
                     <div style={buttonRowStyle}>
                       {([
-                        { id: "grok", label: "Grok Imagine" },
+                        { id: "grok", label: "Grok Imagine 2.0" },
                         { id: "qwen", label: "Qwen Image Edit 2.0" },
                         { id: "seedream", label: "Seedream v5 Pro" },
                         { id: "flux", label: "FLUX.1 Kontext" },
