@@ -648,7 +648,7 @@ export async function POST(req: NextRequest) {
             enhance_prompt: true,
           })
         : await callFalEditModel(GROK_EDIT_MODEL, "Grok", imageUrls, fullPrompt, {
-            num_images: 5,
+            num_images: 1,
             aspect_ratio: "auto",
             resolution,
             output_format: "jpeg",
